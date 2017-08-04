@@ -65,6 +65,8 @@
 #include <execinfo.h>
 #endif /* HAVE_GLIBC_BACKTRACE */
 
+DEFINE_HOOK(rfp_clear_vnc_nve_all, (), ())
+
 struct ethaddr rfapi_ethaddr0 = {{0}};
 
 #define DEBUG_RFAPI_STR "RF API debugging/testing command\n"
@@ -3786,13 +3788,11 @@ static void rfapi_print_exported(struct bgp *bgp)
  */
 void rfapi_delete(struct bgp *bgp)
 {
-	extern void rfp_clear_vnc_nve_all(void); /* can't fix correctly yet */
-
 	/*
 	 * This clears queries and registered routes, and closes nves
 	 */
 	if (bgp->rfapi)
-		rfp_clear_vnc_nve_all();
+		hook_call(rfp_clear_vnc_nve_all);
 	bgp_rfapi_cfg_destroy(bgp, bgp->rfapi_cfg);
 	bgp->rfapi_cfg = NULL;
 	bgp_rfapi_destroy(bgp, bgp->rfapi);

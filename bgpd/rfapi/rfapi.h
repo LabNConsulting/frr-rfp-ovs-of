@@ -28,6 +28,7 @@
 #include "lib/zebra.h"
 #include "lib/vty.h"
 #include "lib/prefix.h"
+#include "lib/hook.h"
 #include "bgpd/bgpd.h"
 #include "bgpd/bgp_encap_types.h"
 
@@ -349,12 +350,19 @@ struct rfapi_rfp_cfg {
  *              copied by caller, updated via rfp_set_configuration
  *    cbmp      Pointer to rfapi_rfp_cb_methods, may be null
  *              copied by caller, updated via rfapi_rfp_set_cb_methods
- * return value:
+ * out value:
  *    rfp_start_val rfp returned value passed on rfp_stop and other rfapi calls
+ *
+ * note: theoretically, multiple modules can register for this hook, but
+ * the API only supports one "out" value for now.  modules should abort
+ * initialization if out != NULL, so only 1 module will be active.
 --------------------------------------------*/
-extern void *rfp_start(struct thread_master *master,
-		       struct rfapi_rfp_cfg **cfgp,
-		       struct rfapi_rfp_cb_methods **cbmp);
+DECLARE_HOOK(rfp_start,
+		(struct thread_master *master,
+		 struct rfapi_rfp_cfg **cfgp,
+		 struct rfapi_rfp_cb_methods **cbmp,
+		 void **out),
+		(master, cfgp, cbmp, out))
 
 /*------------------------------------------
  * rfp_stop
@@ -369,7 +377,11 @@ extern void *rfp_start(struct thread_master *master,
  *
  * return value:
 --------------------------------------------*/
-extern void rfp_stop(void *rfp_start_val);
+DECLARE_HOOK(rfp_stop, (void *rfp_start_val), (rfp_start_val))
+
+
+/* hack/workaround */
+DECLARE_HOOK(rfp_clear_vnc_nve_all, (), ())
 
 /***********************************************************************
  *		 RFP processing behavior configuration

@@ -1513,8 +1513,10 @@ static void rib_do_callback_onepass(struct rfapi_descriptor *rfd, afi_t afi)
 
 		if (rfd->response_cb)
 			f = rfd->response_cb;
-		else
+		else if (bgp->rfapi->rfp_methods.response_cb)
 			f = bgp->rfapi->rfp_methods.response_cb;
+		else
+			return;
 
 		bgp->rfapi->flags |= RFAPI_INCALLBACK;
 		vnc_zlog_debug_verbose("%s: invoking updated response callback",
