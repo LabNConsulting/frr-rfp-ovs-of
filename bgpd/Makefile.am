@@ -4,14 +4,6 @@ AUTOMAKE_OPTIONS = subdir-objects
 include ../common.am
 
 if ENABLE_BGP_VNC
-#o file to keep linker happy
-BGP_VNC_RFP_LIB=rfapi/rfapi_descriptor_rfp_utils.o @top_builddir@/$(LIBRFP)/librfp.a 
-BGP_VNC_RFP_INC=-I@top_srcdir@/$(RFPINC)
-BGP_VNC_RFP_HD=\
-	@top_srcdir@/$(RFPINC)/rfp.h
-BGP_VNC_RFP_LD_FLAGS_FILE=@top_srcdir@/$(LIBRFP)/rfp_ld_flags
-BGP_VNC_RFP_LD_FLAGS=`if [ -e  "$(BGP_VNC_RFP_LD_FLAGS_FILE)" ] ; then cat "$(BGP_VNC_RFP_LD_FLAGS_FILE)" ; fi `
-
 #BGP_VNC_RFAPI_SRCDIR=rfapi
 BGP_VNC_RFAPI_SRCDIR=
 BGP_VNC_RFAPI_INC=-Irfapi
@@ -49,20 +41,16 @@ BGP_VNC_RFAPI_HD=rfapi/bgp_rfapi_cfg.h \
 	rfapi/vnc_zebra.h \
 	rfapi/vnc_export_bgp_p.h \
 	rfapi/vnc_import_bgp_p.h \
-	bgp_vnc_types.h $(BGP_VNC_RFP_HD)
+	bgp_vnc_types.h
 
 else
 BGP_VNC_RFAPI_INC=
 BGP_VNC_RFAPI_SRC=
 BGP_VNC_RFAPI_HD=
-BGP_VNC_RFP_LIB=
-BGP_VNC_RFP_INC=
-BGP_VNC_RFP_HD=
-BGP_VNC_RFP_LD_FLAGS=
 endif
 
 AM_CPPFLAGS = -I.. -I$(top_srcdir) -I$(top_srcdir)/lib -I$(top_builddir)/lib \
-	$(BGP_VNC_RFAPI_INC) $(BGP_VNC_RFP_INC)
+	$(BGP_VNC_RFAPI_INC)
 DEFS = @DEFS@ -DSYSCONFDIR=\"$(sysconfdir)/\"
 INSTALL_SDATA=@INSTALL@ -m 600
 
@@ -98,12 +86,10 @@ noinst_HEADERS = \
         bgp_vpn.h bgp_label.h bgp_rd.h bgp_evpn_private.h
 
 bgpd_SOURCES = bgp_main.c
-bgpd_LDADD = libbgp.a  $(BGP_VNC_RFP_LIB) ../lib/libfrr.la @LIBCAP@ @LIBM@
-bgpd_LDFLAGS = $(BGP_VNC_RFP_LD_FLAGS)
+bgpd_LDADD = libbgp.a ../lib/libfrr.la @LIBCAP@ @LIBM@
 
 bgp_btoa_SOURCES = bgp_btoa.c
-bgp_btoa_LDADD = libbgp.a $(BGP_VNC_RFP_LIB) ../lib/libfrr.la @LIBCAP@ @LIBM@
-bgp_btoa_LDFLAGS = $(BGP_VNC_RFP_LD_FLAGS)
+bgp_btoa_LDADD = libbgp.a ../lib/libfrr.la @LIBCAP@ @LIBM@
 
 if SNMP
 module_LTLIBRARIES += bgpd_snmp.la

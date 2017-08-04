@@ -63,6 +63,14 @@
 #include <execinfo.h>
 #endif /* HAVE_GLIBC_BACKTRACE */
 
+DEFINE_HOOK(rfp_start,
+		(struct thread_master *master,
+		 struct rfapi_rfp_cfg **cfgp,
+		 struct rfapi_rfp_cb_methods **cbmp,
+		 void **out),
+		(master, cfgp, cbmp, out))
+DEFINE_HOOK(rfp_stop, (void *rfp_start_val), (rfp_start_val))
+
 #undef DEBUG_MONITOR_MOVE_SHORTER
 #undef DEBUG_RETURNED_NHL
 #undef DEBUG_ROUTE_COUNTERS
@@ -4283,7 +4291,9 @@ struct rfapi *bgp_rfapi_new(struct bgp *bgp)
 	h->deferred_close_q->spec.workfunc = rfapi_deferred_close_workfunc;
 	h->deferred_close_q->spec.data = h;
 
-	h->rfp = rfp_start(bm->master, &cfg, &cbm);
+	h->rfp = NULL;
+	hook_call(rfp_start, bm->master, &cfg, &cbm, &h->rfp);
+
 	bgp->rfapi_cfg = bgp_rfapi_cfg_new(cfg);
 	if (cbm != NULL) {
 		h->rfp_methods = *cbm;
@@ -4329,7 +4339,7 @@ void bgp_rfapi_destroy(struct bgp *bgp, struct rfapi *h)
 	work_queue_free(h->deferred_close_q);
 
 	if (h->rfp != NULL)
-		rfp_stop(h->rfp);
+		hook_call(rfp_stop, h->rfp);
 
 	for (afi = AFI_IP; afi < AFI_MAX; afi++) {
 		route_table_finish(h->un[afi]);

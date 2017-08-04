@@ -22,6 +22,7 @@
 #include "rfp_internal.h"
 #include "bgpd/rfapi/rfapi.h"
 #include "lib/command.h"
+#include "lib/version.h"
 
 struct rfp_instance_t {
 	struct rfapi_rfp_cfg rfapi_config;
@@ -30,7 +31,7 @@ struct rfp_instance_t {
 	uint32_t config_var;
 };
 
-struct rfp_instance_t
+static struct rfp_instance_t
 	global_rfi; /* dynamically allocate in full implementation */
 
 /***********************************************************************
@@ -222,9 +223,13 @@ static int rfp_cfg_write_cb(struct vty *vty, void *rfp_start_val)
  *    rfp_start_val rfp returned value passed on rfp_stop and rfp_cfg_write
  *
 --------------------------------------------*/
-void *rfp_start(struct thread_master *master, struct rfapi_rfp_cfg **cfgp,
-		struct rfapi_rfp_cb_methods **cbmp)
+static int example_start(struct thread_master *master,
+			  struct rfapi_rfp_cfg **cfgp,
+			  struct rfapi_rfp_cb_methods **cbmp, void **out)
 {
+	if (!out || *out)
+		return 0;
+
 	memset(&global_rfi, 0, sizeof(struct rfp_instance_t));
 	global_rfi.master = master; /* for BGPD threads */
 
@@ -253,7 +258,8 @@ void *rfp_start(struct thread_master *master, struct rfapi_rfp_cfg **cfgp,
 
 	rfp_vty_install();
 
-	return &global_rfi;
+	*out = &global_rfi;
+	return 0;
 }
 
 /*------------------------------------------
@@ -270,13 +276,29 @@ void *rfp_start(struct thread_master *master, struct rfapi_rfp_cfg **cfgp,
  * return value:
  *    rfp_start_val
 --------------------------------------------*/
-void rfp_stop(void *rfp_start_val)
+static int example_stop(void *rfp_start_val)
 {
 	assert(rfp_start_val != NULL);
+	return 0;
 }
 
 /* TO BE REMOVED */
-void rfp_clear_vnc_nve_all(void)
+static int example_clear_vnc_nve_all(void)
 {
-	return;
+	return 0;
 }
+
+static int rfp_example_module_init(void)
+{
+	hook_register(rfp_start, example_start);
+	hook_register(rfp_stop, example_stop);
+	hook_register(rfp_clear_vnc_nve_all, example_clear_vnc_nve_all);
+	return 0;
+}
+
+FRR_MODULE_SETUP(
+	.name = "rfp_example",
+	.version = FRR_VERSION,
+	.description = "RFAPI RFP example module",
+	.init = rfp_example_module_init
+)
