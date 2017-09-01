@@ -2046,7 +2046,7 @@ rfp_get_l2_group_str_by_pnum (char *buf,
                         ecommunity_cmp (rfg->rt_import_list, rfg->rt_export_list))
                       {
                         char *b = ecommunity_ecom2str (rfg->rt_import_list,
-                                               ECOMMUNITY_FORMAT_ROUTE_MAP);
+                                                       ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
                         buf += sprintf(buf," %s", b);
                         XFREE (MTYPE_ECOMMUNITY_STR, b);
                       }
@@ -2057,14 +2057,14 @@ rfp_get_l2_group_str_by_pnum (char *buf,
                         if (rfg->rt_import_list)
                           {
                             i = ecommunity_ecom2str (rfg->rt_import_list,
-                                                     ECOMMUNITY_FORMAT_ROUTE_MAP);
+                                                     ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
                             buf += sprintf(buf," import %s", i);
                             XFREE (MTYPE_ECOMMUNITY_STR, i);
                           }
                         if (rfg->rt_export_list)
                           {
                             e =  ecommunity_ecom2str (rfg->rt_export_list,
-                                                      ECOMMUNITY_FORMAT_ROUTE_MAP);
+                                                      ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
                             buf += sprintf(buf," export %s", e);
                             XFREE (MTYPE_ECOMMUNITY_STR, e);
                           }
