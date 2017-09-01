@@ -1,0 +1,651 @@
+diff --git a/include/openvswitch/vlog.h b/include/openvswitch/vlog.h
+index 6b599c9..0366b59 100644
+--- a/include/openvswitch/vlog.h
++++ b/include/openvswitch/vlog.h
+@@ -265,14 +265,14 @@ void vlog_usage(void);
+ #define VLOG(LEVEL, ...)                                \
+     do {                                                \
+         enum vlog_level level__ = LEVEL;                \
+-        if (THIS_MODULE->min_level >= level__) {        \
++        if (THIS_MODULE->min_level >= (int)level__) {   \
+             vlog(THIS_MODULE, level__, __VA_ARGS__);    \
+         }                                               \
+     } while (0)
+ #define VLOG_RL(RL, LEVEL, ...)                                     \
+     do {                                                            \
+         enum vlog_level level__ = LEVEL;                            \
+-        if (THIS_MODULE->min_level >= level__) {                    \
++        if (THIS_MODULE->min_level >= (int)level__) {               \
+             vlog_rate_limit(THIS_MODULE, level__, RL, __VA_ARGS__); \
+         }                                                           \
+     } while (0)
+diff --git a/lib/learning-switch.c b/lib/learning-switch.c
+index 72be457..56ba75a 100644
+--- a/lib/learning-switch.c
++++ b/lib/learning-switch.c
+@@ -45,6 +45,10 @@
+ #include "openvswitch/vconn.h"
+ #include "openvswitch/vlog.h"
+ 
++#ifdef RFP_OVS_OF
++#include "rfp_ovs_of.h"
++#endif
++
+ VLOG_DEFINE_THIS_MODULE(learning_switch);
+ 
+ struct lswitch_port {
+@@ -103,37 +107,31 @@ static void send_features_request(struct lswitch *);
+ static void lswitch_process_packet(struct lswitch *, const struct ofpbuf *);
+ static enum ofperr process_switch_features(struct lswitch *,
+                                            struct ofp_header *);
++#ifdef RFP_OVS_OF
++static enum ofperr
++process_switch_port_status(struct lswitch *sw, struct ofp_header *oh);
++static enum ofperr
++process_switch_port_desc(struct lswitch *sw, struct ofp_header *oh);
++#endif
++
+ static void process_packet_in(struct lswitch *, const struct ofp_header *);
+ static void process_echo_request(struct lswitch *, const struct ofp_header *);
+ 
++#ifndef RFP_OVS_OF_NO_CONTROLLER
+ static ofp_port_t get_mac_entry_ofp_port(const struct mac_learning *ml,
+                                          const struct mac_entry *)
+     OVS_REQ_RDLOCK(ml->rwlock);
+ static void set_mac_entry_ofp_port(struct mac_learning *ml,
+                                    struct mac_entry *, ofp_port_t)
+     OVS_REQ_WRLOCK(ml->rwlock);
++#endif
+ 
+-/* Creates and returns a new learning switch whose configuration is given by
+- * 'cfg'.
+- *
+- * 'rconn' is used to send out an OpenFlow features request. */
+-struct lswitch *
+-lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
++void
++lswitch_set_wildcards(struct lswitch *sw, uint32_t wildcards) 
+ {
+-    struct lswitch *sw;
+     uint32_t ofpfw;
+ 
+-    sw = xzalloc(sizeof *sw);
+-    sw->rconn = rconn;
+-    sw->state = S_CONNECTING;
+-    sw->max_idle = cfg->max_idle;
+-    sw->datapath_id = 0;
+-    sw->ml = (cfg->mode == LSW_LEARN
+-              ? mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME)
+-              : NULL);
+-    sw->action_normal = cfg->mode == LSW_NORMAL;
+-
+-    switch (cfg->wildcards) {
++    switch (wildcards) {
+     case 0:
+         ofpfw = 0;
+         break;
+@@ -149,10 +147,32 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
+         break;
+ 
+     default:
+-        ofpfw = cfg->wildcards;
++        ofpfw = wildcards;
+         break;
+     }
+-    ofputil_wildcard_from_ofpfw10(ofpfw, &sw->wc);
++    ofputil_wildcard_from_ofpfw10(ofpfw, &(sw->wc));
++}
++
++
++/* Creates and returns a new learning switch whose configuration is given by
++ * 'cfg'.
++ *
++ * 'rconn' is used to send out an OpenFlow features request. */
++struct lswitch *
++lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
++{
++    struct lswitch *sw;
++
++    sw = xzalloc(sizeof *sw);
++    sw->rconn = rconn;
++    sw->state = S_CONNECTING;
++    sw->max_idle = cfg->max_idle;
++    sw->datapath_id = 0;
++    sw->ml = (cfg->mode == LSW_LEARN
++              ? mac_learning_create(MAC_ENTRY_DEFAULT_IDLE_TIME)
++              : NULL);
++    sw->action_normal = cfg->mode == LSW_NORMAL;
++    lswitch_set_wildcards(sw, cfg->wildcards);
+ 
+     sw->default_queue = cfg->default_queue;
+     hmap_init(&sw->queue_numbers);
+@@ -177,16 +197,53 @@ lswitch_create(struct rconn *rconn, const struct lswitch_config *cfg)
+     return sw;
+ }
+ 
+-static void
+-lswitch_handshake(struct lswitch *sw)
++void
++lswitch_init_flows(struct lswitch *sw)
+ {
+     enum ofputil_protocol protocol;
+     enum ofp_version version;
+ 
+-    send_features_request(sw);
+-
++    protocol = sw->protocol;
+     version = rconn_get_version(sw->rconn);
+-    protocol = ofputil_protocol_from_ofp_version(version);
++#ifdef RFP_OVS_OF
++    {
++        /* clear all flows on connect */
++        struct ofputil_flow_mod fm;
++        struct ofpact_output output;
++        struct ofpbuf *msg;
++        int error;
++
++        ofpact_init_OUTPUT(&output);
++        output.port = OFPP_CONTROLLER;
++        output.max_len = OFP_DEFAULT_MISS_SEND_LEN;
++
++        match_init_catchall(&fm.match);
++        fm.priority = 0;
++        fm.cookie = 0;
++        fm.cookie_mask = 0;
++        fm.new_cookie = 0;
++        fm.modify_cookie = false;
++        fm.table_id = 0;
++        fm.command = OFPFC_DELETE;
++        fm.idle_timeout = 0;
++        fm.hard_timeout = 0;
++        fm.importance = 0;
++        fm.buffer_id = UINT32_MAX;
++        fm.out_port = OFPP_ANY;
++        fm.out_group = OFPG_ANY;
++        fm.flags = 0;
++        fm.ofpacts = 0;
++        fm.ofpacts_len = 0;
++        fm.delete_reason = 0;
++
++        msg = ofputil_encode_flow_mod(&fm, protocol);
++        error = rconn_send(sw->rconn, msg, NULL);
++        if (error) {
++            VLOG_INFO_RL(&rl, "%s: failed to add default flow (%s)",
++                         rconn_get_name(sw->rconn), ovs_strerror(error));
++        }
++    }
++#endif
+     if (version >= OFP13_VERSION) {
+         /* OpenFlow 1.3 and later by default drop packets that miss in the flow
+          * table.  Set up a flow to send packets to the controller by
+@@ -226,6 +283,20 @@ lswitch_handshake(struct lswitch *sw)
+                          rconn_get_name(sw->rconn), ovs_strerror(error));
+         }
+     }
++}
++
++static void
++lswitch_handshake(struct lswitch *sw)
++{
++    enum ofputil_protocol protocol;
++    enum ofp_version version;
++
++    send_features_request(sw);
++
++    version = rconn_get_version(sw->rconn);
++    protocol = ofputil_protocol_from_ofp_version(version);
++    sw->protocol = protocol;
++    lswitch_init_flows(sw);
+     if (sw->default_flows) {
+         struct ofpbuf *msg = NULL;
+         int error = 0;
+@@ -272,6 +343,12 @@ lswitch_is_alive(const struct lswitch *sw)
+     return rconn_is_alive(sw->rconn);
+ }
+ 
++bool
++lswitch_is_connected(const struct lswitch *sw)
++{
++    return rconn_is_connected(sw->rconn);
++}
++
+ /* Destroys 'sw'. */
+ void
+ lswitch_destroy(struct lswitch *sw)
+@@ -384,15 +461,28 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
+     case OFPTYPE_FLOW_REMOVED:
+         /* Nothing to do. */
+         break;
+-
+-    case OFPTYPE_HELLO:
++#ifdef RFP_OVS_OF
++    case OFPTYPE_PORT_STATUS:
++        process_switch_port_status(sw, msg->data);
++        break;
++    case OFPTYPE_PORT_DESC_STATS_REPLY:
++        process_switch_port_desc(sw, msg->data);
++        break;
++#endif
+     case OFPTYPE_ERROR:
++        if (VLOG_IS_INFO_ENABLED()) {
++            char *s = ofp_to_string(msg->data, msg->size, 2);
++            VLOG_INFO_RL(&rl, "%016llx: OpenFlow packet received: %s",
++                         sw->datapath_id, s);
++            free(s);
++        }
++        break;
++    case OFPTYPE_HELLO:
+     case OFPTYPE_ECHO_REPLY:
+     case OFPTYPE_FEATURES_REQUEST:
+     case OFPTYPE_GET_CONFIG_REQUEST:
+     case OFPTYPE_GET_CONFIG_REPLY:
+     case OFPTYPE_SET_CONFIG:
+-    case OFPTYPE_PORT_STATUS:
+     case OFPTYPE_PACKET_OUT:
+     case OFPTYPE_FLOW_MOD:
+     case OFPTYPE_GROUP_MOD:
+@@ -415,7 +505,6 @@ lswitch_process_packet(struct lswitch *sw, const struct ofpbuf *msg)
+     case OFPTYPE_QUEUE_STATS_REQUEST:
+     case OFPTYPE_QUEUE_STATS_REPLY:
+     case OFPTYPE_PORT_DESC_STATS_REQUEST:
+-    case OFPTYPE_PORT_DESC_STATS_REPLY:
+     case OFPTYPE_ROLE_REQUEST:
+     case OFPTYPE_ROLE_REPLY:
+     case OFPTYPE_ROLE_STATUS:
+@@ -518,17 +607,92 @@ process_switch_features(struct lswitch *sw, struct ofp_header *oh)
+ 
+     sw->datapath_id = features.datapath_id;
+ 
++#ifdef RFP_OVS_OF
++    rfp_ovs_set_sw_features(sw, sw->datapath_id);
++
++    if (oh->version >= OFP13_VERSION) {
++        struct ofpbuf *mb;
++        mb = ofpraw_alloc(OFPRAW_OFPST10_PORT_DESC_REQUEST, oh->version, 0);
++        queue_tx(sw, mb);
++    }
++#endif
++
+     while (!ofputil_pull_phy_port(oh->version, &b, &port)) {
++#ifdef RFP_OVS_OF
++        if (port.config != OFPUTIL_PC_PORT_DOWN &&
++            port.state  != OFPUTIL_PS_LINK_DOWN)
++            rfp_ovs_of_mac(1, sw, sw->datapath_id, 0, &port.hw_addr, 
++                           0, NULL, port.port_no, RFAPI_INFINITE_LIFETIME);
++#endif
++#ifndef RFP_OVS_OF_NO_CONTROLLER
+         struct lswitch_port *lp = shash_find_data(&sw->queue_names, port.name);
+         if (lp && hmap_node_is_null(&lp->hmap_node)) {
+             lp->port_no = port.port_no;
+             hmap_insert(&sw->queue_numbers, &lp->hmap_node,
+                         hash_ofp_port(lp->port_no));
+         }
++#endif
++    }
++    return 0;
++}
++
++#ifdef RFP_OVS_OF
++static enum ofperr
++process_switch_port_status(struct lswitch *sw, struct ofp_header *oh)
++{
++    struct ofputil_phy_port *port;
++    struct ofputil_port_status ps;
++    enum ofperr error;
++    int add;
++
++    error = ofputil_decode_port_status(oh, &ps);
++    if (error) {
++        VLOG_ERR("received invalid port status (%s)",
++                 ofperr_to_string(error));
++        return error;
++    }
++
++    port = &ps.desc;
++    add = (ps.reason != OFPPR_DELETE &&
++           port->config != OFPUTIL_PC_PORT_DOWN &&
++           port->state  != OFPUTIL_PS_LINK_DOWN);
++    rfp_ovs_of_mac(add, sw, sw->datapath_id, 0, &port->hw_addr, 
++                   0, NULL, port->port_no, RFAPI_INFINITE_LIFETIME);
++
++    return 0;
++}
++
++static enum ofperr
++process_switch_port_desc(struct lswitch *sw, struct ofp_header *oh)
++{
++    struct ofpbuf b;
++    enum ofpraw raw;
++    struct ofputil_phy_port port;
++
++    
++    ofpbuf_use_const(&b, oh, ntohs(oh->length));
++    raw = ofpraw_pull_assert(&b);
++    if (raw != OFPRAW_OFPST10_PORT_DESC_REPLY &&
++        raw != OFPRAW_OFPST11_PORT_DESC_REPLY && 
++        raw != OFPRAW_OFPST14_PORT_DESC_REPLY) {
++        VLOG_ERR("received invalid port description reply (type=%d)",
++                 raw);
++        return OFPERR_OFPBRC_BAD_STAT;
++    }
++
++    while (!ofputil_pull_phy_port(oh->version, &b, &port)) {
++        int add;
++        add = (port.config != OFPUTIL_PC_PORT_DOWN &&
++               port.state  != OFPUTIL_PS_LINK_DOWN);
++        rfp_ovs_of_mac(add, sw, sw->datapath_id, 0, &(port.hw_addr), 
++                       0, NULL, port.port_no, RFAPI_INFINITE_LIFETIME);
+     }
++
+     return 0;
+ }
++#endif
+ 
++#ifndef RFP_OVS_OF_NO_CONTROLLER
+ static ofp_port_t
+ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
+ {
+@@ -582,6 +746,7 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
+ 
+     return out_port;
+ }
++#endif
+ 
+ static uint32_t
+ get_queue_id(const struct lswitch *sw, ofp_port_t in_port)
+@@ -603,9 +768,16 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
+ {
+     struct ofputil_packet_in pi;
+     uint32_t queue_id;
+-    ofp_port_t out_port;
+-
++    ofp_port_t out_port = OFPP_NONE;
++#ifdef RFP_OVS_OF
++    struct rfp_ovs_of_out out_port_list[RFP_OFS_OF_MAX_PORTS]; /* simplistic for now */
++    int        pcount;
++#endif
++    int        max_idle = sw->max_idle;
++
++#ifndef RFP_OVS_OF
+     uint64_t ofpacts_stub[64 / 8];
++#endif
+     struct ofpbuf ofpacts;
+ 
+     struct ofputil_packet_out po;
+@@ -624,7 +796,8 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
+     /* Ignore packets sent via output to OFPP_CONTROLLER.  This library never
+      * uses such an action.  You never know what experiments might be going on,
+      * though, and it seems best not to interfere with them. */
+-    if (pi.reason != OFPR_NO_MATCH) {
++    if (pi.reason != OFPR_NO_MATCH &&
++        pi.reason != OFPR_ACTION) {
+         return;
+     }
+ 
+@@ -635,16 +808,66 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
+     flow.tunnel.tun_id = pi.flow_metadata.flow.tunnel.tun_id;
+ 
+     /* Choose output port. */
++#ifdef RFP_OVS_OF
++    /* Learn the source MAC. */
++    rfp_ovs_of_mac(1, sw, sw->datapath_id, vlan_tci_to_vid(flow.vlan_tci), 
++                   &(flow.dl_src), flow.nw_src, &(flow.ipv6_src), 
++                   flow.in_port.ofp_port, MAC_ENTRY_DEFAULT_IDLE_TIME);
++
++    pcount = rfp_ovs_of_lookup(sw, sw->datapath_id, 
++                               vlan_tci_to_vid(flow.vlan_tci), &(flow.dl_dst), 
++                               flow.nw_dst, &(flow.ipv6_dst),
++                               flow.in_port.ofp_port,
++                               RFP_OFS_OF_MAX_PORTS, out_port_list);
++    if (pcount > 0)
++        out_port = (ofp_port_t)out_port_list[0].port;
++    if (out_port == OFPP_NONE)
++#endif
++#ifndef RFP_OVS_OF_NO_CONTROLLER
+     out_port = lswitch_choose_destination(sw, &flow);
+-
++#else
++    ;                           /* nothing to do */
++#endif
+     /* Make actions. */
+     queue_id = get_queue_id(sw, pi.flow_metadata.flow.in_port.ofp_port);
++#ifndef RFP_OVS_OF
+     ofpbuf_use_stack(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
++#else
++    ofpbuf_init(&ofpacts, RFP_OFS_OF_MAX_PORTS);
++#endif
+     if (out_port == OFPP_NONE) {
+         /* No actions. */
+     } else if (queue_id == UINT32_MAX
+                || ofp_to_u16(out_port) >= ofp_to_u16(OFPP_MAX)) {
++#ifndef RFP_OVS_OF
+         ofpact_put_OUTPUT(&ofpacts)->port = out_port;
++#else
++        if (pcount) {
++          uint32_t in_port = flow.in_port.ofp_port;
++          uint16_t cur_vid = vlan_tci_to_vid(flow.vlan_tci);
++          int         port = 0;
++          if (pcount > 1)
++            max_idle = 1;       /* remove learning flows after 1sec */
++          while (port < pcount) {
++            if (cur_vid != out_port_list[port].vid) {
++              if (cur_vid)
++                ofpact_put_STRIP_VLAN(&ofpacts);
++              if (out_port_list[port].vid){
++                struct ofpact_vlan_vid *vlan_vid;
++                vlan_vid = ofpact_put_SET_VLAN_VID(&ofpacts);
++                vlan_vid->vlan_vid = out_port_list[port].vid;
++                vlan_vid->push_vlan_if_needed = true;
++              }
++              cur_vid = out_port_list[port].vid;
++            }
++            if (in_port == out_port_list[port].port)
++              ofpact_put_OUTPUT(&ofpacts)->port =  OFPP_IN_PORT; /* loop */
++            else
++              ofpact_put_OUTPUT(&ofpacts)->port = (ofp_port_t)out_port_list[port].port;
++            port++;
++          }
++        }
++#endif
+     } else {
+         struct ofpact_enqueue *enqueue = ofpact_put_ENQUEUE(&ofpacts);
+         enqueue->port = out_port;
+@@ -666,7 +889,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
+     po.ofpacts_len = ofpacts.size;
+ 
+     /* Send the packet, and possibly the whole flow, to the output port. */
+-    if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
++    if (max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
+         struct ofputil_flow_mod fm;
+         struct ofpbuf *buffer;
+ 
+@@ -678,7 +901,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
+         fm.priority = 1; /* Must be > 0 because of table-miss flow entry. */
+         fm.table_id = 0xff;
+         fm.command = OFPFC_ADD;
+-        fm.idle_timeout = sw->max_idle;
++        fm.idle_timeout = max_idle;
+         fm.buffer_id = pi.buffer_id;
+         fm.out_port = OFPP_NONE;
+         fm.ofpacts = ofpacts.data;
+@@ -698,6 +921,10 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
+             queue_tx(sw, ofputil_encode_packet_out(&po, sw->protocol));
+         }
+     }
++#ifdef RFP_OVS_OF
++    ofpbuf_uninit(&ofpacts);
++#endif
++
+ }
+ 
+ static void
+@@ -706,6 +933,7 @@ process_echo_request(struct lswitch *sw, const struct ofp_header *rq)
+     queue_tx(sw, make_echo_reply(rq));
+ }
+ 
++#ifndef RFP_OVS_OF_NO_CONTROLLER
+ static ofp_port_t
+ get_mac_entry_ofp_port(const struct mac_learning *ml,
+                        const struct mac_entry *e)
+@@ -722,3 +950,4 @@ set_mac_entry_ofp_port(struct mac_learning *ml,
+ {
+     mac_entry_set_port(ml, e, (void *) (OVS_FORCE uintptr_t) ofp_port);
+ }
++#endif
+diff --git a/lib/learning-switch.h b/lib/learning-switch.h
+index b3a5d13..9b2c258 100644
+--- a/lib/learning-switch.h
++++ b/lib/learning-switch.h
+@@ -66,12 +66,15 @@ struct lswitch_config {
+ };
+ 
+ struct lswitch *lswitch_create(struct rconn *, const struct lswitch_config *);
++void lswitch_set_wildcards(struct lswitch *, uint32_t wildcards);
+ bool lswitch_is_alive(const struct lswitch *);
++bool lswitch_is_connected(const struct lswitch *);
+ void lswitch_set_queue(struct lswitch *sw, uint32_t queue);
+ void lswitch_run(struct lswitch *);
+ void lswitch_wait(struct lswitch *);
+ void lswitch_destroy(struct lswitch *);
+ 
+ void lswitch_mute(struct lswitch *);
++void lswitch_init_flows(struct lswitch *sw);
+ 
+ #endif /* learning-switch.h */
+diff --git a/lib/packets.h b/lib/packets.h
+index 84daca1..f9705d9 100644
+--- a/lib/packets.h
++++ b/lib/packets.h
+@@ -266,7 +266,7 @@ static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
+ {
+     struct eth_addr dst;
+ 
+-    for (int i = 0; i < ARRAY_SIZE(src.be16); i++) {
++    for (int i = 0; i < (int)ARRAY_SIZE(src.be16); i++) {
+         dst.be16[i] = ~src.be16[i];
+     }
+ 
+diff --git a/lib/stream-fd.c b/lib/stream-fd.c
+index 83c6e1e..b8324a5 100644
+--- a/lib/stream-fd.c
++++ b/lib/stream-fd.c
+@@ -288,3 +288,17 @@ maybe_unlink_and_free(char *path)
+         free(path);
+     }
+ }
++
++int 
++pfd_get_fd(struct pstream *pstream)
++{
++    struct fd_pstream *ps = fd_pstream_cast(pstream);
++    return ps->fd;
++}
++
++int 
++stream_get_fd(struct stream *stream)
++{
++    struct stream_fd *s = stream_fd_cast(stream);
++    return s->fd;
++}
+diff --git a/lib/stream-fd.h b/lib/stream-fd.h
+index 12452dd..1b1c1be 100644
+--- a/lib/stream-fd.h
++++ b/lib/stream-fd.h
+@@ -36,4 +36,6 @@ int new_fd_pstream(const char *name, int fd,
+                    char *unlink_path,
+                    struct pstream **pstreamp);
+ 
++extern int pfd_get_fd(struct pstream *pstream);
++extern int stream_get_fd(struct stream *stream);
+ #endif /* stream-fd.h */
+diff --git a/lib/unixctl.c b/lib/unixctl.c
+index d8ad9b7..b25d8d2 100644
+--- a/lib/unixctl.c
++++ b/lib/unixctl.c
+@@ -28,6 +28,7 @@
+ #include "shash.h"
+ #include "stream.h"
+ #include "stream-provider.h"
++#include "stream-fd.h"
+ #include "svec.h"
+ #include "openvswitch/vlog.h"
+ 
+@@ -515,3 +516,9 @@ unixctl_client_transact(struct jsonrpc *client, const char *command, int argc,
+     jsonrpc_msg_destroy(reply);
+     return error;
+ }
++
++int
++unixctl_get_stream_fd(struct unixctl_server *server)
++{
++    return pfd_get_fd(server->listener);
++}
+diff --git a/lib/unixctl.h b/lib/unixctl.h
+index ce43893..e1b18b7 100644
+--- a/lib/unixctl.h
++++ b/lib/unixctl.h
+@@ -46,6 +46,9 @@ void unixctl_command_register(const char *name, const char *usage,
+ void unixctl_command_reply_error(struct unixctl_conn *, const char *error);
+ void unixctl_command_reply(struct unixctl_conn *, const char *body);
+ 
++extern int
++unixctl_get_stream_fd(struct unixctl_server *server);
++
+ #ifdef  __cplusplus
+ }
+ #endif
+diff --git a/lib/vconn-provider.h b/lib/vconn-provider.h
+index 523f26f..f428624 100644
+--- a/lib/vconn-provider.h
++++ b/lib/vconn-provider.h
+@@ -195,4 +195,6 @@ extern const struct vconn_class ssl_vconn_class;
+ extern const struct pvconn_class pssl_pvconn_class;
+ #endif
+ 
++extern int vconn_get_stream_fd(struct vconn *vconn);
++extern int pvconn_get_stream_fd(struct pvconn *pvconn);
+ #endif /* vconn-provider.h */
+diff --git a/lib/vconn-stream.c b/lib/vconn-stream.c
+index fb228f0..8e79610 100644
+--- a/lib/vconn-stream.c
++++ b/lib/vconn-stream.c
+@@ -27,6 +27,7 @@
+ #include "poll-loop.h"
+ #include "socket-util.h"
+ #include "stream.h"
++#include "stream-fd.h"
+ #include "util.h"
+ #include "vconn-provider.h"
+ #include "openvswitch/vconn.h"
+@@ -395,3 +396,14 @@ const struct pvconn_class punix_pvconn_class = PSTREAM_INIT("punix");
+ const struct vconn_class ssl_vconn_class = STREAM_INIT("ssl");
+ const struct pvconn_class pssl_pvconn_class = PSTREAM_INIT("pssl");
+ #endif
++
++int pvconn_get_stream_fd(struct pvconn *pvconn) {
++    struct pvconn_pstream *ps = pvconn_pstream_cast(pvconn);
++    return pfd_get_fd(ps->pstream);
++}
++
++int vconn_get_stream_fd(struct vconn *vconn) {
++    struct vconn_stream *s = vconn_stream_cast(vconn);
++    return stream_get_fd(s->stream);
++}
++
+diff --git a/manpages.mk b/manpages.mk
+index bf96e9f..6141242 100644
+--- a/manpages.mk
++++ b/manpages.mk
+@@ -110,6 +110,12 @@ utilities/ovs-appctl.8: \
+ utilities/ovs-appctl.8.in:
+ lib/common.man:
+ 
++utilities/ovs-benchmark.1: \
++	utilities/ovs-benchmark.1.in \
++	lib/ovs.tmac
++utilities/ovs-benchmark.1.in:
++lib/ovs.tmac:
++
+ utilities/ovs-dpctl-top.8: \
+ 	utilities/ovs-dpctl-top.8.in
+ utilities/ovs-dpctl-top.8.in:
