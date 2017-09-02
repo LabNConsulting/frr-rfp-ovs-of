@@ -1,4 +1,4 @@
-/* 
+/*
  *
  * Copyright 2015-2017, LabN Consulting, L.L.C.
  *
@@ -24,9 +24,9 @@
 #define _RFP_H
 
 #include "rfapi.h"
-extern int bgp_rfp_cfg_write (void *vty, void *bgp);
+extern int bgp_rfp_cfg_write(void *vty, void *bgp);
 /* TO BE REMOVED */
-void rfp_clear_vnc_nve_all (void);
+void rfp_clear_vnc_nve_all(void);
 DECLARE_MGROUP(RFP)
 DECLARE_MTYPE(RFP_GENERIC)
 
