@@ -1505,8 +1505,7 @@ static int rfp_fd_accept(struct thread *thread)
 	assert(thread_list != NULL);
 	assert(fd == thread_list->fd);
 	assert(rfi != NULL);
-	thread_list->thread =
-		thread_add_read(rfi->master, rfp_fd_accept, thread_list, fd);
+	thread_add_read(rfi->master, rfp_fd_accept, thread_list, fd, &thread_list->thread);
 	(thread_list->cb)(rfi->ooi, fd, thread_list->data);
 	return 1;
 }
@@ -1525,8 +1524,7 @@ void rfp_fd_listen(void *parent, int fd, rfp_fd_cb_t *cb, void *data)
 	thread_list->parent = rfi;
 	thread_list->next = rfi->threads;
 	rfi->threads = thread_list;
-	thread_list->thread =
-		thread_add_read(rfi->master, rfp_fd_accept, thread_list, fd);
+	thread_add_read(rfi->master, rfp_fd_accept, thread_list, fd, &thread_list->thread);
 }
 
 int rfp_fd_close(void *parent, int fd)
