@@ -363,7 +363,7 @@ rfp_output(void *vvty, const char *string)
 
 DEFUN (vnc_rfp_loglevel,
        vnc_rfp_loglevel_cmd,
-       "vnc openflow log-level (off|emergency|error|warning|info|debug)",
+       "vnc openflow log-level <off|emergency|error|warning|info|debug>",
        VNC_CONFIG_STR
        OF_CONFIG_STR
        "Set the log level of OVS OpenFlow\n"
@@ -377,13 +377,13 @@ DEFUN (vnc_rfp_loglevel,
   int ll;
   const char *error;
   struct rfp_instance_t *rfi = NULL;
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
 
-  ll = rfp_get_loglevel_index (argv[0]);
+  ll = rfp_get_loglevel_index (argv[3]->arg);
   if (ll < 0)
     {
       vty_out (vty, "%s isn't a recognized logging level.%s",
-               argv[0], VTY_NEWLINE);
+               argv[3]->arg, VTY_NEWLINE);
       return CMD_WARNING;
     }
   error = rfp_ovs_of_set_loglevel (rfp_get_loglevel_ovs (ll));
@@ -406,7 +406,7 @@ DEFUN (vnc_show_rfp_listen_ports,
   struct listnode *node;
   void *data;
   struct rfp_instance_t *rfi = NULL;
-  rfi = rfapi_get_rfp_start_val (bgp_get_default ());   /* assume 1 instance for now */
+  rfi = rfapi_get_rfp_start_val (bgp_get_default());   /* assume 1 instance for now */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
@@ -440,7 +440,7 @@ ALIAS (vnc_show_rfp_listen_ports,
        "Display OpenFlow listening ports\n")
 DEFUN (vnc_listen_ports,
        vnc_listen_ports_cmd,
-       "vnc rfp-listen-ports .PORTLIST",
+       "vnc rfp-listen-ports (0-65535)...",
        VNC_CONFIG_STR
        "Configure RFP listen-ports\n"
        "Space separated list of TCP port numbers <0-65535>, 0 = disable RFP\n")
@@ -449,7 +449,7 @@ DEFUN (vnc_listen_ports,
   struct list *pl = list_new ();
   int disable = 0;
   struct rfp_instance_t *rfi = NULL;
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
 
   if (!rfi)
     {
@@ -469,12 +469,19 @@ DEFUN (vnc_listen_ports,
       argc = 16;
       return CMD_WARNING;
     }
-
+  argc-=2;			/* skip static part of command */
+  argv+=2;
+  /* check for command alias */
+  if (argv[0]->arg[0] == 'l')
+    {
+      argc--;
+      argv++;
+    }
   for (; argc; --argc, ++argv)
     {
       int pnum;
 
-      VTY_GET_INTEGER_RANGE ("Port number", pnum, argv[0], 0, 65535);
+      VTY_GET_INTEGER_RANGE ("Port number", pnum, argv[0]->arg, 0, 65535);
       if (pnum == 0)
         disable = 1;            /* RFP is to be disabled */
       else
@@ -510,15 +517,15 @@ DEFUN (vnc_listen_ports,
 
 ALIAS (vnc_listen_ports,
        vnc_of_listen_ports_cmd,
-       "vnc openflow listen-ports .PORTLIST",
+       "vnc openflow listen-ports (0-65535)...",
        VNC_CONFIG_STR
        OF_CONFIG_STR
        "Configure OpenFlow listen-ports (6633 OpenFlow 1.0 only)\n"
        "Space separated list of TCP port numbers <0-65535>, 0 = disable OpenFlow\n")
 /* for compatibility with regression scripts */
-  DEFUN (vnc_rfp_updated_responses,
+DEFUN (vnc_rfp_updated_responses,
        vnc_rfp_updated_responses_cmd,
-       "vnc rfp-updated-responses (on|off)",
+       "vnc rfp-updated-responses <on|off>",
        VNC_CONFIG_STR
        "Control generation of updated RFP responses\n"
        "Enable updated RFP responses\n" "Disable updated RFP responses\n")
@@ -529,7 +536,7 @@ ALIAS (vnc_listen_ports,
   struct bgp *bgp;
   struct rfp_cli *rci;
 
-  bgp = vty->index;
+  bgp = VTY_GET_CONTEXT(bgp); /* BGP_NODE */
   rci = rfapi_get_rfp_start_val_by_bgp (bgp);
 
   if (!bgp)
@@ -544,7 +551,7 @@ ALIAS (vnc_listen_ports,
       return CMD_WARNING;
     }
 
-  if (argv[0][1] == 'f')
+  if (argv[2]->arg[1] == 'f')
     {
       rci->rfp_cfg.use_updated_response = 0;
     }
@@ -561,7 +568,7 @@ ALIAS (vnc_listen_ports,
 /* for compatibility with regression scripts */
 DEFUN (vnc_rfp_removal_responses,
        vnc_rfp_removal_responses_cmd,
-       "vnc rfp-removal-responses (on|off)",
+       "vnc rfp-removal-responses <on|off>",
        VNC_CONFIG_STR
        "Control generation of updated RFP response-removal messages\n"
        "Enable updated RFP response-removal messages\n"
@@ -573,7 +580,7 @@ DEFUN (vnc_rfp_removal_responses,
   struct bgp *bgp;
   struct rfp_cli *rci;
 
-  bgp = vty->index;
+  bgp = VTY_GET_CONTEXT(bgp); /* BGP_NODE */
   rci = rfapi_get_rfp_start_val_by_bgp (bgp);
 
   if (!bgp)
@@ -588,7 +595,7 @@ DEFUN (vnc_rfp_removal_responses,
       return CMD_WARNING;
     }
 
-  if (argv[0][1] == 'f')
+  if (argv[2]->arg[1] == 'f')
     {
       rci->rfp_cfg.use_removes = 0;
     }
@@ -608,7 +615,7 @@ DEFUN (vnc_show_vlan_mode,
        SHOW_STR RFAPI_SHOW_STR OF_SHOW_STR "Display OpenFlow VLAN mode\n")
 {
   struct rfp_instance_t *rfi = NULL;
-  rfi = rfapi_get_rfp_start_val (bgp_get_default ());   /* assume 1 instance for now */
+  rfi = rfapi_get_rfp_start_val (bgp_get_default());   /* assume 1 instance for now */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
@@ -624,7 +631,7 @@ DEFUN (vnc_show_vlan_mode,
 
 DEFUN (vnc_vlan_mode,
        vnc_vlan_mode_cmd,
-       "vnc openflow vlan-mode (tagged|untagged)",
+       "vnc openflow vlan-mode <tagged|untagged>",
        VNC_CONFIG_STR
        OF_CONFIG_STR
        "Configure OpenFlow VLAN mode\n"
@@ -633,7 +640,7 @@ DEFUN (vnc_vlan_mode,
   int ret = CMD_SUCCESS;
   struct rfp_instance_t *rfi = NULL;
   int new;
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
 
   if (!rfi)
     {
@@ -641,7 +648,7 @@ DEFUN (vnc_vlan_mode,
       return CMD_WARNING;
     }
 
-  new = (*argv[0] == 't');      /* tagged */
+  new = (argv[3]->arg[0] == 't');      /* tagged */
   if (rfi->use_vlans != new && RFI_ACTIVE (rfi))
     {
       /* config change need to reset all connections */
@@ -660,7 +667,7 @@ DEFUN (vnc_show_flow_mode,
        RFAPI_SHOW_STR OF_SHOW_STR "Display OpenFlow flow entry mode\n")
 {
   struct rfp_instance_t *rfi = NULL;
-  rfi = rfapi_get_rfp_start_val (bgp_get_default ());   /* assume 1 instance for now */
+  rfi = rfapi_get_rfp_start_val (bgp_get_default());   /* assume 1 instance for now */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
@@ -675,7 +682,7 @@ DEFUN (vnc_show_flow_mode,
 
 DEFUN (vnc_flow_mode,
        vnc_flow_mode_cmd,
-       "vnc openflow flow-mode (with-wildcards|flow-specific)",
+       "vnc openflow flow-mode <with-wildcards|flow-specific>",
        VNC_CONFIG_STR
        OF_CONFIG_STR
        "Configure OpenFlow flow table entry mode\n"
@@ -684,7 +691,7 @@ DEFUN (vnc_flow_mode,
   int ret = CMD_SUCCESS;
   struct rfp_instance_t *rfi = NULL;
   int new;
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
 
   if (!rfi)
     {
@@ -692,7 +699,7 @@ DEFUN (vnc_flow_mode,
       return CMD_WARNING;
     }
 
-  new = (*argv[0] == 'w');      /* with-wildcards */
+  new = (argv[3]->arg[0] == 'w');      /* with-wildcards */
   if (rfi->use_wildcards != new && RFI_ACTIVE (rfi))
     {
       /* config change need to reset all connections */
@@ -708,7 +715,7 @@ DEFUN (vnc_flow_mode,
 static int
 vnc_l2_group_of_dpid_common (struct vty *vty,
                              int argc,
-                             const char **argv, rfp_group_config_type type)
+                             struct cmd_token **argv, rfp_group_config_type type)
 {
   VTY_DECLVAR_CONTEXT_SUB(rfapi_l2_group_cfg, rfg);
   struct rfp_instance_t *rfi = NULL;
@@ -717,24 +724,24 @@ vnc_l2_group_of_dpid_common (struct vty *vty,
   char *e;
   uint16_t vid = 0;
 
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
       return CMD_WARNING;
     }
 
-  datapath_id = strtoll (argv[0], &e, 16);      /* force hex */
+  datapath_id = strtoll (argv[2]->arg, &e, 16);      /* force hex */
   if (datapath_id == 0)
     {
       vty_out (vty, "Datapath identifier can't be zero%s", VTY_NEWLINE);
       return CMD_WARNING;
     }
 
-  if (argc == 2)
+  if (argc == 5)
     {
-      if (argv[1][0] != 'u')    /* untagged = 0 */
-        VTY_GET_INTEGER_RANGE ("VLAN ID", vid, argv[1], 1, 4094);
+      if (argv[4]->arg[0] != 'u')    /* untagged = 0 */
+        VTY_GET_INTEGER_RANGE ("VLAN ID", vid, argv[4]->arg, 1, 4094);
       assert (type == RFP_GRP_CFG_ANY);
       type = RFP_GRP_CFG_VID;
     }
@@ -790,7 +797,7 @@ DEFUN (vnc_l2_group_of_dpid_config,
 
 DEFUN (vnc_l2_group_of_dpid_vpid,
        vnc_l2_group_of_dpid_vpid_cmd,
-       "openflow dpid DPID vid <1-4094>",
+       "openflow dpid DPID vid (1-4094)",
        OF_CONFIG_STR
        "set associated OpenFlow DPID information\n"
        "DPID in hexadecimal\n"
@@ -802,7 +809,7 @@ DEFUN (vnc_l2_group_of_dpid_vpid,
 
 ALIAS (vnc_l2_group_of_dpid_vpid,
        vnc_l2_group_of_dpid_untagged_cmd,
-       "openflow dpid DPID vid (untagged|)",
+       "openflow dpid DPID vid [untagged]",
        OF_CONFIG_STR
        "set associated OpenFlow DPID information\n"
        "DPID in hexadecimal\n"
@@ -824,7 +831,7 @@ DEFUN (vnc_l2_group_of_no_dpid,
   struct rfp_instance_t *rfi = NULL;
   struct rfp_group_config *rgc;
 
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
@@ -843,7 +850,7 @@ DEFUN (vnc_l2_group_of_no_dpid,
 
 DEFUN (vnc_l2_group_of_vlan_mode,
        vnc_l2_group_of_vlan_mode_cmd,
-       "openflow vlan-mode (tagged|untagged)",
+       "openflow vlan-mode <tagged|untagged>",
        OF_CONFIG_STR
        "Configure group OpenFlow vlan-mode\n"
        "Network ID based on VID\n" "Ignore VLAN tags\n")
@@ -853,14 +860,14 @@ DEFUN (vnc_l2_group_of_vlan_mode,
   rfp_group_config_type type = RFP_GRP_CFG_MODES;
   int new;
 
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
       return CMD_WARNING;
     }
 
-  new = (*argv[0] == 't');      /* tagged */
+  new = (argv[2]->arg[0] == 't');      /* tagged */
 
   rgc = rfp_get_group_config_vty (rfi, vty, type);
   if (rgc == NULL)
@@ -890,7 +897,7 @@ DEFUN (vnc_l2_group_of_no_vlan_mode,
   struct rfp_group_config *rgc;
   rfp_group_config_type type = RFP_GRP_CFG_MODES;
 
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
@@ -918,7 +925,7 @@ DEFUN (vnc_l2_group_of_no_vlan_mode,
 
 DEFUN (vnc_l2_group_of_flow_mode,
        vnc_l2_group_of_flow_mode_cmd,
-       "openflow flow-mode (with-wildcards|flow-specific)",
+       "openflow flow-mode <with-wildcards|flow-specific>",
        OF_CONFIG_STR
        "Configure group OpenFlow flow table entry mode\n"
        "Use wildcards\n" "Use flow specific entries\n")
@@ -928,14 +935,14 @@ DEFUN (vnc_l2_group_of_flow_mode,
   rfp_group_config_type type = RFP_GRP_CFG_MODES;
   int new;
 
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
       return CMD_WARNING;
     }
 
-  new = (*argv[0] == 'w');      /* with-wildcards */
+  new = (argv[2]->arg[0] == 'w');      /* with-wildcards */
 
   rgc = rfp_get_group_config_vty (rfi, vty, type);
   if (rgc == NULL)
@@ -971,7 +978,7 @@ DEFUN (vnc_l2_group_of_no_flow_mode,
       return CMD_WARNING;
     }
 
-  rfi = rfapi_get_rfp_start_val (vty->index);   /* index=bgp for BGP_NODE */
+  rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
   rgc = rfp_get_group_config_vty (rfi, vty, RFP_GRP_CFG_ANY);
   if (rgc == NULL)
     return CMD_WARNING;
@@ -995,21 +1002,21 @@ DEFUN (vnc_l2_group_of_no_flow_mode,
 static int
 rfp_ovs_of_handle_reset(struct vty *vty,  
                         int argc,
-                        const char **argv,
+                        struct cmd_token **argv,
                         int nve) 
 {
   struct rfp_instance_t *rfi = NULL;
   int connections;
   struct rfapi_ip_addr un;
 
-  rfi = rfapi_get_rfp_start_val (bgp_get_default ());   /* assume 1 instance for now */
+  rfi = rfapi_get_rfp_start_val (bgp_get_default());   /* assume 1 instance for now */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
       return CMD_WARNING;
     }
-  connections = (*(argv[0]) == 'c');
-  if (argc == 1)
+  connections = (argv[2]->arg[0] == 'c');
+  if (argc == 4)
     {                           /* all */
       if (connections)
         return rfp_do_reset_all (rfi);
@@ -1018,7 +1025,7 @@ rfp_ovs_of_handle_reset(struct vty *vty,
       return CMD_SUCCESS;
     }
   /* nve */
-  if (nve && !rfapiCliGetRfapiIpAddr (vty, argv[1], &un))
+if (nve && (argc == 5 && !rfapiCliGetRfapiIpAddr (vty, argv[4]->arg, &un)))
     {
       int rc;
       union
@@ -1049,7 +1056,7 @@ rfp_ovs_of_handle_reset(struct vty *vty,
       int rc;
       unsigned long long int datapath_id;
       char *e;
-      datapath_id = strtoll (argv[1], &e, 16);
+      datapath_id = strtoll (argv[4]->arg, &e, 16);
       if (connections)
         rc = rfp_ovs_of_reset_all_by_dpid (rfi->ooi, datapath_id);
       else
@@ -1063,19 +1070,21 @@ rfp_ovs_of_handle_reset(struct vty *vty,
 /* reset all OF switch state */
 DEFUN (vnc_rfp_of_reset,
        vnc_rfp_of_reset_cmd,
-       "clear openflow (connections|flows) nve (A.B.C.D|X:X::X:X)",
+       "clear openflow <connections|flows> nve <A.B.C.D|X:X::X:X>",
        "Clear stored data\n"
-       "VNC Information\n"
+       "VNC Openflow Information\n"
        "Remove OpenFlow connection\n"
        "Remove OpenFlow flow state\n"
-       "Remove state for one switch (using NVE UN address)\n")
+       "Remove state for one switch (using NVE UN address)\n"
+       "NVE UN IPv4 address\n"
+       "NVE UN IPv6 address\n")
 {
   return rfp_ovs_of_handle_reset(vty, argc, argv, 1);
 }
 
 ALIAS (vnc_rfp_of_reset,
        vnc_rfp_of_reset_all_cmd,
-       "clear openflow (connections|flows) all",
+       "clear openflow <connections|flows> all",
        "Clear stored data\n"
        "VNC Openflow Information\n"
        "Remove OpenFlow connection\n"
@@ -1084,19 +1093,20 @@ ALIAS (vnc_rfp_of_reset,
 
 DEFUN (vnc_rfp_of_reset_dpid,
        vnc_rfp_of_reset_dpid_cmd,
-       "clear openflow (connections|flows) dpid DPID",
+       "clear openflow <connections|flows> dpid DPID",
        "Clear stored data\n"
        "VNC Openflow Information\n"
        "Remove OpenFlow connection\n"
        "Remove OpenFlow flow state\n"
-       "Remove state for one switch (using OpenFlow DPID)\n")
+       "Remove state for one switch (using OpenFlow DPID)\n"
+       "DPID in hexadecimal\n")
 {
   return rfp_ovs_of_handle_reset(vty, argc, argv, 0);
 }
 
 DEFUN (vnc_show_of_helper,
        vnc_show_of_helper_cmd,
-       "show vnc openflow helper DPID .VIDLIST",
+       "show vnc openflow helper DPID (0-4094)...",
        SHOW_STR
        RFAPI_SHOW_STR
        OF_SHOW_STR
@@ -1107,14 +1117,16 @@ DEFUN (vnc_show_of_helper,
   struct rfp_instance_t *rfi = NULL;
   unsigned long long int datapath_id;
   char *e;
-  rfi = rfapi_get_rfp_start_val (bgp_get_default ());   /* assume 1 instance for now */
+  rfi = rfapi_get_rfp_start_val (bgp_get_default());   /* assume 1 instance for now */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
       return CMD_WARNING;
     }
 
-  datapath_id = strtoll (argv[0], &e, 16);      /* force hex */
+  argc -= 4;			/* skip fixed */
+  argv += 4;
+  datapath_id = strtoll (argv[0]->arg, &e, 16);      /* force hex */
   argc--;
   argv++;
 
@@ -1129,7 +1141,7 @@ DEFUN (vnc_show_of_helper,
     {
       uint16_t vid;
       uint32_t lni;
-      VTY_GET_INTEGER_RANGE ("VLAN ID", vid, argv[0], 0, 4094);
+      VTY_GET_INTEGER_RANGE ("VLAN ID", vid, argv[0]->arg, 0, 4094);
       lni = rfp_get_lni (rfi, datapath_id, -1, vid);
       vty_out (vty, "%016llx %-8d --> %d (0x%x)%s",
                datapath_id, vid, lni, lni, VTY_NEWLINE);
@@ -1150,14 +1162,14 @@ DEFUN (vnc_show_of_switches,
   unsigned long long int datapath_id = 0;
   char *e;
 
-  rfi = rfapi_get_rfp_start_val (bgp_get_default ());   /* assume 1 instance for now */
+  rfi = rfapi_get_rfp_start_val (bgp_get_default());   /* assume 1 instance for now */
   if (!rfi)
     {
       vty_out (vty, "OpenFlow not running%s", VTY_NEWLINE);
       return CMD_WARNING;
     }
-  if (argc)
-    datapath_id = strtoll (argv[0], &e, 16);      /* force hex */
+  if (argc == 5)
+    datapath_id = strtoll (argv[4]->arg, &e, 16);      /* force hex */
   rfp_ovs_of_show_switches (vty, rfi->ooi, datapath_id);
   return CMD_SUCCESS;
 }
@@ -1167,8 +1179,8 @@ ALIAS (vnc_show_of_switches,
        SHOW_STR
        RFAPI_SHOW_STR
        OF_SHOW_STR
-       "Display openflow switches information"  
-       "ID of switch to disply\n")
+       "Display openflow switches information\n"
+       "ID of switch to display (in hexadecimal)\n")
 
 static void
 rfp_vty_install ()
