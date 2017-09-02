@@ -3459,7 +3459,7 @@ DEFUN_NOSH (vnc_l2_group,
 	}
 
 	/* Search for name */
-	rfg = rfapi_l2_group_lookup_byname(bgp, argv[1]->arg);
+	rfg = rfapi_l2_group_lookup_byname(bgp, argv[2]->arg);
 
 	if (!rfg) {
 		rfg = rfapi_l2_group_new();
@@ -3469,7 +3469,7 @@ DEFUN_NOSH (vnc_l2_group,
 				VTY_NEWLINE);
 			return CMD_WARNING;
 		}
-		rfg->name = strdup(argv[1]->arg);
+		rfg->name = strdup(argv[2]->arg);
 		/* add to tail of list */
 		listnode_add(bgp->rfapi_cfg->l2_groups, rfg);
 	}
@@ -3549,7 +3549,7 @@ DEFUN (vnc_no_l2_group,
 
 DEFUN (vnc_l2_group_lni,
        vnc_l2_group_lni_cmd,
-       "logical-network-id <0-4294967295>",
+       "logical-network-id (0-4294967295)",
        "Specify Logical Network ID associated with group\n"
        "value\n")
 {
