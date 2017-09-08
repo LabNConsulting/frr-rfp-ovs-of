@@ -14,7 +14,7 @@ module_LTLIBRARIES += bgpd_rfp_example.la
 
 bgpd_rfp_example_la_SOURCES = rfp_example.c
 bgpd_rfp_example_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
-bgpd_rfp_example_la_LIBADD = ../../../lib/libfrrsnmp.la
+bgpd_rfp_example_la_LIBADD =
 
 noinst_HEADERS += \
 	rfp.h \
