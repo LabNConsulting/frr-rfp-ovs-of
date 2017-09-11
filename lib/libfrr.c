@@ -913,3 +913,15 @@ void frr_fini(void)
 		fclose(fp);
 	}
 }
+
+/* force hook_register/unregister to be present in statically linked executables */
+DECLARE_HOOK(dummy_hook, (), ())
+DEFINE_HOOK(dummy_hook, (), ())
+extern int _dummy_hook_register (void);
+int _dummy_hook_register (void)
+{
+	hook_register (dummy_hook, _dummy_hook_register);
+	hook_unregister (dummy_hook, _dummy_hook_register);
+	hook_call(dummy_hook);
+	return 0;
+}
