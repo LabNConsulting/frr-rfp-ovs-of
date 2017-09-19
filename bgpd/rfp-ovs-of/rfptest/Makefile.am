@@ -4,14 +4,11 @@
 #
 ## Process this file with automake to produce Makefile.in.
 
-top_srcdir=$(abs_top_srcdir)
-top_builddir=$(top_srcdir)
-
 if ENABLE_BGP_VNC
 BGP_VNC_RFAPI_INC=-I$(top_srcdir)/bgpd/rfapi
 BGP_VNC_RFP_LIBDIR=../librfp
 BGP_VNC_RFP_INCDIR=$(BGP_VNC_RFP_LIBDIR)
-BGP_VNC_RFP_LIB=$(BGP_VNC_RFP_LIBDIR)/librfp.a
+BGP_VNC_RFP_LIB=
 BGP_VNC_RFP_INC=-I$(BGP_VNC_RFP_INCDIR)
 
 rfptest_SOURCES =  \
@@ -31,7 +28,8 @@ BGP_VNC_RFP_INC=
 RFPTEST_BIN=
 endif
 
-AM_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/lib -I$(top_builddir)/lib\
+AM_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/lib \
+	-I$(top_builddir) -I$(top_builddir)/lib \
 	$(BGP_VNC_RFAPI_INC) $(BGP_VNC_RFP_INC)
 
 DEFS = @DEFS@ -DSYSCONFDIR=\"$(sysconfdir)/\"

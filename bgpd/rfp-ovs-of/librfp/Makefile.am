@@ -29,7 +29,7 @@ OVS_PATCHED_FILES= \
 
 BGP_VNC_RFP_INCDIR=$(OVS)/include
 BGP_VNC_RFP_LIBDIR=$(OVS)/lib
-BGP_VNC_RFP_LIB=libdummy.a librfp.a
+BGP_VNC_RFP_LIB=libdummy.a 
 BGP_VNC_RFP_INC=-I$(BGP_VNC_RFP_INCDIR) -I$(BGP_VNC_RFP_LIBDIR) -I$(OVS)
 BGP_VNC_RFP_DEFS=-std=gnu99 -DRFP_OVS_OF
 BGP_VNC_RFP_HD= \
@@ -195,7 +195,8 @@ BGP_VNC_RFP_HD= \
 	$(BGP_VNC_RFP_LIBDIR)/ct-dpif.h \
 	$(BGP_VNC_RFP_LIBDIR)/netlink-conntrack.h
 
-librfp_a_SOURCES = \
+
+bgpd_rfp_ovs_of_la_SOURCES = \
 	$(BGP_VNC_RFP_LIBDIR)/aes128.c \
 	$(BGP_VNC_RFP_LIBDIR)/async-append-aio.c \
 	$(BGP_VNC_RFP_LIBDIR)/backtrace.c \
@@ -335,7 +336,7 @@ librfp_a_SOURCES = \
 
 #	$(BGP_VNC_RFP_LIBDIR)/stream-ssl.c 
 
-librfp_a_INCLUDES = \
+bgpd_rfp_ovs_of_la_INCLUDES = \
         rfp.h \
         rfp_internal.h
 
@@ -381,6 +382,12 @@ BGP_VNC_RFP_DEFS=
 BGP_VNC_RFP_HD=
 endif
 
+
+module_LTLIBRARIES = bgpd_rfp_ovs_of.la
+
+bgpd_rfp_ovs_of_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
+bgpd_rfp_ovs_of_la_LIBADD =
+
 AM_CPPFLAGS = -I. -I$(top_srcdir)/lib -I$(top_srcdir) \
 	 $(BGP_VNC_RFP_INC) $(BGP_VNC_RFAPI_INC)
 
@@ -393,7 +400,7 @@ AM_LDFLAGS = $(PILDFLAGS)
 
 noinst_LIBRARIES = $(BGP_VNC_RFP_LIB)
 noinst_HEADERS = \
-	$(BGP_VNC_RFAPI_HD) $(BGP_VNC_RFP_HD) $(librfp_a_INCLUDES)
+	$(BGP_VNC_RFAPI_HD) $(BGP_VNC_RFP_HD) $(bgpd_rfp_ovs_of_la_INCLUDES)
 
 
 
