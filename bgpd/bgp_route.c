@@ -2744,11 +2744,13 @@ int bgp_update(struct peer *peer, struct prefix *p, u_int32_t addpath_id,
 		if (SAFI_MPLS_VPN == safi) {
 			uint32_t label = decode_label(tag);
 
-			rfapiProcessUpdate(peer, NULL, p, prd, attr, afi, safi,
+			rfapiProcessUpdate(bgp, peer, NULL, p, prd,
+					   attr, afi, safi,
 					   type, sub_type, &label);
 		}
 		if (SAFI_ENCAP == safi) {
-			rfapiProcessUpdate(peer, NULL, p, prd, attr, afi, safi,
+			rfapiProcessUpdate(bgp, peer, NULL, p, prd,
+					   attr, afi, safi,
 					   type, sub_type, NULL);
 		}
 #endif
@@ -2849,11 +2851,13 @@ int bgp_update(struct peer *peer, struct prefix *p, u_int32_t addpath_id,
 	if (SAFI_MPLS_VPN == safi) {
 		uint32_t label = decode_label(tag);
 
-		rfapiProcessUpdate(peer, NULL, p, prd, attr, afi, safi, type,
+		rfapiProcessUpdate(bgp, peer, NULL, p, prd,
+				   attr, afi, safi, type,
 				   sub_type, &label);
 	}
 	if (SAFI_ENCAP == safi) {
-		rfapiProcessUpdate(peer, NULL, p, prd, attr, afi, safi, type,
+		rfapiProcessUpdate(bgp, peer, NULL, p, prd,
+				   attr, afi, safi, type,
 				   sub_type, NULL);
 	}
 #endif
@@ -4069,7 +4073,8 @@ static void bgp_static_update_safi(struct bgp *bgp, struct prefix *p,
 			bgp_aggregate_increment(bgp, p, ri, afi, safi);
 			bgp_process(bgp, rn, afi, safi);
 #if ENABLE_BGP_VNC
-			rfapiProcessUpdate(ri->peer, NULL, p, &bgp_static->prd,
+			rfapiProcessUpdate(bgp, ri->peer, NULL, p,
+					   &bgp_static->prd,
 					   ri->attr, afi, safi, ri->type,
 					   ri->sub_type, &label);
 #endif
@@ -4103,7 +4108,8 @@ static void bgp_static_update_safi(struct bgp *bgp, struct prefix *p,
 	bgp_process(bgp, rn, afi, safi);
 
 #if ENABLE_BGP_VNC
-	rfapiProcessUpdate(new->peer, NULL, p, &bgp_static->prd, new->attr, afi,
+	rfapiProcessUpdate(bgp, new->peer, NULL, p, &bgp_static->prd,
+			   new->attr, afi,
 			   safi, new->type, new->sub_type, &label);
 #endif
 

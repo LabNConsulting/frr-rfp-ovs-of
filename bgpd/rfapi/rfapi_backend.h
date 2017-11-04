@@ -36,7 +36,8 @@ extern void rfapi_delete(struct bgp *);
 struct rfapi *bgp_rfapi_new(struct bgp *bgp);
 void bgp_rfapi_destroy(struct bgp *bgp, struct rfapi *h);
 
-extern void rfapiProcessUpdate(struct peer *peer, void *rfd, struct prefix *p,
+extern void rfapiProcessUpdate(struct bgp *bgp, struct peer *peer,
+			       void *rfd, struct prefix *p,
 			       struct prefix_rd *prd, struct attr *attr,
 			       afi_t afi, safi_t safi, u_char type,
 			       u_char sub_type, uint32_t *label);
