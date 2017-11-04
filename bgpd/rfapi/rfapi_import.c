@@ -583,8 +583,6 @@ struct rfapi_import_table *rfapiMacImportTableGet(struct bgp *bgp, uint32_t lni)
 			it->imported_encap[afi] = agg_table_init();
 		}
 
-		it->l2_logical_net_id = lni;
-
 		skiplist_insert(h->import_mac, (void *)lni_as_ptr, it);
 	}
 
@@ -3896,13 +3894,12 @@ rfapiBgpInfoFilteredImportFunction(safi_t safi)
 	}
 }
 
-void rfapiProcessUpdate(struct peer *peer,
+void rfapiProcessUpdate(struct bgp *bgp, struct peer *peer,
 			void *rfd, /* set when looped from RFP/RFAPI */
 			struct prefix *p, struct prefix_rd *prd,
 			struct attr *attr, afi_t afi, safi_t safi, uint8_t type,
 			uint8_t sub_type, uint32_t *label)
 {
-	struct bgp *bgp;
 	struct rfapi *h;
 	struct rfapi_import_table *it;
 	int has_ip_route = 1;

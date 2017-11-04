@@ -39,7 +39,6 @@ struct rfapi_import_table {
 	struct rfapi_nve_group_cfg *rfg;
 	struct ecommunity *rt_import_list; /* copied from nve grp */
 	int refcount;			   /* nve grps and nves */
-	uint32_t l2_logical_net_id;	/* L2 only: EVPN Eth Seg Id */
 	struct agg_table *imported_vpn[AFI_MAX];
 	struct rfapi_monitor_vpn *vpn0_queries[AFI_MAX];
 	struct rfapi_monitor_eth *eth0_queries;

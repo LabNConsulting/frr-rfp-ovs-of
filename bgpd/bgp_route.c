@@ -3521,11 +3521,13 @@ int bgp_update(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 		if (SAFI_MPLS_VPN == safi) {
 			mpls_label_t label_decoded = decode_label(label);
 
-			rfapiProcessUpdate(peer, NULL, p, prd, attr, afi, safi,
+			rfapiProcessUpdate(bgp, peer, NULL, p, prd,
+					   attr, afi, safi,
 					   type, sub_type, &label_decoded);
 		}
 		if (SAFI_ENCAP == safi) {
-			rfapiProcessUpdate(peer, NULL, p, prd, attr, afi, safi,
+			rfapiProcessUpdate(bgp, peer, NULL, p, prd,
+					   attr, afi, safi,
 					   type, sub_type, NULL);
 		}
 #endif
@@ -3652,11 +3654,13 @@ int bgp_update(struct peer *peer, struct prefix *p, uint32_t addpath_id,
 	if (SAFI_MPLS_VPN == safi) {
 		mpls_label_t label_decoded = decode_label(label);
 
-		rfapiProcessUpdate(peer, NULL, p, prd, attr, afi, safi, type,
+		rfapiProcessUpdate(bgp, peer, NULL, p, prd,
+				   attr, afi, safi, type,
 				   sub_type, &label_decoded);
 	}
 	if (SAFI_ENCAP == safi) {
-		rfapiProcessUpdate(peer, NULL, p, prd, attr, afi, safi, type,
+		rfapiProcessUpdate(bgp, peer, NULL, p, prd,
+				   attr, afi, safi, type,
 				   sub_type, NULL);
 	}
 #endif
@@ -5016,9 +5020,10 @@ static void bgp_static_update_safi(struct bgp *bgp, struct prefix *p,
 				vpn_leak_to_vrf_update(bgp, pi);
 			}
 #if ENABLE_BGP_VNC
-			rfapiProcessUpdate(pi->peer, NULL, p, &bgp_static->prd,
-					   pi->attr, afi, safi, pi->type,
-					   pi->sub_type, &label);
+			rfapiProcessUpdate(bgp, ri->peer, NULL, p,
+					   &bgp_static->prd,
+					   ri->attr, afi, safi, ri->type,
+					   ri->sub_type, &label);
 #endif
 			bgp_unlock_node(rn);
 			aspath_unintern(&attr.aspath);
@@ -5056,7 +5061,8 @@ static void bgp_static_update_safi(struct bgp *bgp, struct prefix *p,
 		vpn_leak_to_vrf_update(bgp, new);
 	}
 #if ENABLE_BGP_VNC
-	rfapiProcessUpdate(new->peer, NULL, p, &bgp_static->prd, new->attr, afi,
+	rfapiProcessUpdate(bgp, new->peer, NULL, p, &bgp_static->prd,
+			   new->attr, afi,
 			   safi, new->type, new->sub_type, &label);
 #endif
 

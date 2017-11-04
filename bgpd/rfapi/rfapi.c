@@ -853,13 +853,22 @@ void add_vnc_route(struct rfapi_descriptor *rfd, /* cookie, VPN UN addr, peer */
 
 	if (attr.ecommunity->size) {
 		attr.flag |= ATTR_FLAG_BIT(BGP_ATTR_EXT_COMMUNITIES);
+		if (VNC_DEBUG(VERBOSE)) {
+			char *s = NULL;
+
+			s = ecommunity_ecom2str(attr.extra->ecommunity,
+						ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
+			vnc_zlog_debug_verbose(
+				"%s: attr.extra->ecommunity=%p: %s",
+				__func__, attr.extra->ecommunity, s);
+			XFREE(MTYPE_ECOMMUNITY_STR, s);
+		}
 	} else {
 		ecommunity_free(&attr.ecommunity);
 		attr.ecommunity = NULL;
 	}
 	vnc_zlog_debug_verbose("%s: attr.ecommunity=%p", __func__,
 			       attr.ecommunity);
-
 
 	/*
 	 * At this point:
@@ -1046,6 +1055,18 @@ void add_vnc_route(struct rfapi_descriptor *rfd, /* cookie, VPN UN addr, peer */
 				bgp_unlock_node(prn);
 			}
 
+			if (VNC_DEBUG(VERBOSE) &&
+			    bi->attr->extra->ecommunity) {
+				char *s = NULL;
+
+				s = ecommunity_ecom2str(
+						bi->attr->extra->ecommunity,
+						ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
+				vnc_zlog_debug_verbose(
+				"%s: bi->attr->extra->ecommunity=%p: %s",
+				__func__, bi->attr->extra->ecommunity, s);
+				XFREE(MTYPE_ECOMMUNITY_STR, s);
+			}
 			/* Process change. */
 			bgp_aggregate_increment(bgp, p, bpi, afi, safi);
 			bgp_process(bgp, bn, afi, safi);
@@ -1099,7 +1120,8 @@ void add_vnc_route(struct rfapi_descriptor *rfd, /* cookie, VPN UN addr, peer */
 
 done:
 	/* Loop back to import tables */
-	rfapiProcessUpdate(rfd->peer, rfd, p, prd, new_attr, afi, safi, type,
+	rfapiProcessUpdate(bgp, rfd->peer, rfd, p, prd, new_attr,
+			   afi, safi, type,
 			   sub_type, &label_val);
 	vnc_zlog_debug_verbose("%s: looped back import route (safi=%d)",
 			       __func__, safi);
@@ -2683,6 +2705,17 @@ int rfapi_register(void *handle, struct rfapi_ip_prefix *prefix,
 				if (rtlist == NULL)
 					rtlist = ecommunity_new();
 				ecommunity_add_val(rtlist, &ecom_value);
+			}
+			if (VNC_DEBUG(VERBOSE)) {
+				char *s = NULL;
+
+				if (rtlist)
+					s = ecommunity_ecom2str(rtlist,
+						ECOMMUNITY_FORMAT_ROUTE_MAP, 0);
+				vnc_zlog_debug_verbose("%s: rtlist: %s",
+						       __func__,
+						       (s?s:"(empty)"));
+				XFREE(MTYPE_ECOMMUNITY_STR, s);
 			}
 		}
 
