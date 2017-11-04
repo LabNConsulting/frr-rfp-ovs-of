@@ -316,12 +316,21 @@ DEFUN_NOSH (vnc_defaults,
 }
 
 static int set_ecom_list(struct vty *vty, int argc, struct cmd_token **argv,
-			 struct ecommunity **list)
+			 struct ecommunity **list, int isl2)
 {
 	struct ecommunity *ecom = NULL;
 	struct ecommunity *ecomadd;
 
 	for (; argc; --argc, ++argv) {
+		if (isl2 &&
+		    (argv[0]->arg[0] != '0' || argv[0]->arg[1] != ':')) {
+			vty_out(vty,
+				"L2 group RT must start with '0:'%s",
+				VTY_NEWLINE);
+			if (ecom)
+				ecommunity_free(&ecom);
+			return CMD_WARNING;
+		}
 
 		ecomadd = ecommunity_str2com(argv[0]->arg,
 					     ECOMMUNITY_ROUTE_TARGET, 0);
@@ -357,7 +366,7 @@ DEFUN (vnc_defaults_rt_import,
 {
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	return set_ecom_list(vty, argc - 2, argv + 2,
-			     &bgp->rfapi_cfg->default_rt_import_list);
+			     &bgp->rfapi_cfg->default_rt_import_list, 0);
 }
 
 DEFUN (vnc_defaults_rt_export,
@@ -369,7 +378,7 @@ DEFUN (vnc_defaults_rt_export,
 {
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
 	return set_ecom_list(vty, argc - 2, argv + 2,
-			     &bgp->rfapi_cfg->default_rt_export_list);
+			     &bgp->rfapi_cfg->default_rt_export_list, 0);
 }
 
 DEFUN (vnc_defaults_rt_both,
@@ -383,11 +392,11 @@ DEFUN (vnc_defaults_rt_both,
 	int rc;
 
 	rc = set_ecom_list(vty, argc - 2, argv + 2,
-			   &bgp->rfapi_cfg->default_rt_import_list);
+			   &bgp->rfapi_cfg->default_rt_import_list, 0);
 	if (rc != CMD_SUCCESS)
 		return rc;
 	return set_ecom_list(vty, argc - 2, argv + 2,
-			     &bgp->rfapi_cfg->default_rt_export_list);
+			     &bgp->rfapi_cfg->default_rt_export_list, 0);
 }
 
 DEFUN (vnc_defaults_rd,
@@ -2626,7 +2635,7 @@ DEFUN (vnc_nve_group_rt_import,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_import_list);
+	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_import_list, 0);
 	if (rc != CMD_SUCCESS)
 		return rc;
 
@@ -2693,7 +2702,7 @@ DEFUN (vnc_nve_group_rt_export,
 		vnc_redistribute_prechange(bgp);
 	}
 
-	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_export_list);
+	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_export_list, 0);
 
 	if (bgp->rfapi_cfg->rfg_redist == rfg) {
 		vnc_redistribute_postchange(bgp);
@@ -2724,7 +2733,7 @@ DEFUN (vnc_nve_group_rt_both,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_import_list);
+	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_import_list, 0);
 	if (rc != CMD_SUCCESS)
 		return rc;
 
@@ -2772,7 +2781,7 @@ DEFUN (vnc_nve_group_rt_both,
 		vnc_redistribute_prechange(bgp);
 	}
 
-	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_export_list);
+	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_export_list, 0);
 
 	if (bgp->rfapi_cfg->rfg_redist == rfg) {
 		vnc_redistribute_postchange(bgp);
@@ -3155,7 +3164,7 @@ DEFUN (vnc_vrf_policy_rt_import,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_import_list);
+	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_import_list, 0);
 	if (rc != CMD_SUCCESS)
 		return rc;
 
@@ -3222,7 +3231,7 @@ DEFUN (vnc_vrf_policy_rt_export,
 		vnc_redistribute_prechange(bgp);
 	}
 
-	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_export_list);
+	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_export_list, 0);
 
 	if (bgp->rfapi_cfg->rfg_redist == rfg) {
 		vnc_redistribute_postchange(bgp);
@@ -3253,7 +3262,7 @@ DEFUN (vnc_vrf_policy_rt_both,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_import_list);
+	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_import_list, 0);
 	if (rc != CMD_SUCCESS)
 		return rc;
 
@@ -3301,7 +3310,7 @@ DEFUN (vnc_vrf_policy_rt_both,
 		vnc_redistribute_prechange(bgp);
 	}
 
-	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_export_list);
+	rc = set_ecom_list(vty, argc - 2, argv + 2, &rfg->rt_export_list, 0);
 
 	if (bgp->rfapi_cfg->rfg_redist == rfg) {
 		vnc_redistribute_postchange(bgp);
@@ -3584,7 +3593,7 @@ DEFUN (vnc_l2_group_rt,
        "Export+import filters\n"
        "Export filters\n"
        "Import filters\n"
-       "A route target\n")
+       "A route target (must start with 0: for L2 groups)\n")
 {
 	VTY_DECLVAR_CONTEXT_SUB(rfapi_l2_group_cfg, rfg);
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
@@ -3615,10 +3624,10 @@ DEFUN (vnc_l2_group_rt,
 
 	if (do_import)
 		rc = set_ecom_list(vty, argc - 2, argv + 2,
-				   &rfg->rt_import_list);
+				   &rfg->rt_import_list, 1);
 	if (rc == CMD_SUCCESS && do_export)
 		rc = set_ecom_list(vty, argc - 2, argv + 2,
-				   &rfg->rt_export_list);
+				   &rfg->rt_export_list, 1);
 	return rc;
 }
 
