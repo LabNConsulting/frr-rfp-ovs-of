@@ -418,6 +418,18 @@ extern int rfapi_rfp_set_cb_methods(void *rfp_start_val,
  ***********************************************************************/
 
 /*------------------------------------------
+ * rfapi_rfp_group_config_ptr_free_cb_t (callback typedef)
+ *
+ * Callbacks of this type are used to when the memory allocated
+ * by rfapi_rfp_init_group_config_ptr_vty is freed
+ *
+ * input:
+ *	gcp		group specific configuration pointer
+ *
+ *------------------------------------------*/
+typedef void (rfapi_rfp_group_config_ptr_free_cb_t)(void *gcp);
+
+/*------------------------------------------
  * rfapi_rfp_init_group_config_ptr_vty
  *
  * This is used to init or return a previously init'ed group specific
@@ -431,6 +443,7 @@ extern int rfapi_rfp_set_cb_methods(void *rfp_start_val,
  *    type              group type
  *    vty               quagga vty context
  *    size              number of bytes to allocation
+ *    free_routine	routine to call when freeing the group_config_ptr
  *
  * output:
  *    none
@@ -441,7 +454,8 @@ extern int rfapi_rfp_set_cb_methods(void *rfp_start_val,
 extern void *rfapi_rfp_init_group_config_ptr_vty(void *rfp_start_val,
 						 rfapi_rfp_cfg_group_type type,
 						 struct vty *vty,
-						 uint32_t size);
+						 uint32_t size,
+				 rfapi_rfp_group_config_ptr_free_cb_t *cbp);
 
 /*------------------------------------------
  * rfapi_rfp_get_group_config_ptr_vty

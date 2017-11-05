@@ -2362,8 +2362,12 @@ static void bgp_rfapi_delete_nve_group(struct vty *vty, /* NULL = no output */
 		rfg->un_node->info = NULL;
 		agg_unlock_node(rfg->un_node); /* frees */
 	}
-	if (rfg->rfp_cfg)
+	if (rfg->rfp_cfg) {
+		if (rfg->rfp_cfg_free_cb)
+			((rfapi_rfp_group_config_ptr_free_cb_t *)
+			 (rfg->rfp_cfg_free_cb))(rfg->rfp_cfg);
 		XFREE(MTYPE_RFAPI_RFP_GROUP_CFG, rfg->rfp_cfg);
+	}
 	listnode_delete(bgp->rfapi_cfg->nve_groups_sequential, rfg);
 
 	QOBJ_UNREG(rfg);
@@ -3448,7 +3452,12 @@ static void bgp_rfapi_delete_l2_group(struct vty *vty, /* NULL = no output */
 		ecommunity_free(&rfg->rt_export_list);
 	if (rfg->labels)
 		list_delete(&rfg->labels);
-	XFREE(MTYPE_RFAPI_RFP_GROUP_CFG, rfg->rfp_cfg);
+	if (rfg->rfp_cfg){
+		if (rfg->rfp_cfg_free_cb)
+			((rfapi_rfp_group_config_ptr_free_cb_t *)
+			 (rfg->rfp_cfg_free_cb))(rfg->rfp_cfg);
+		XFREE(MTYPE_RFAPI_RFP_GROUP_CFG, rfg->rfp_cfg);
+	}
 	listnode_delete(bgp->rfapi_cfg->l2_groups, rfg);
 
 	rfapi_l2_group_del(rfg);
@@ -3891,11 +3900,15 @@ void bgp_rfapi_cfg_destroy(struct bgp *bgp, struct rfapi_cfg *h)
 		ecommunity_free(&h->default_rt_export_list);
 	if (h->default_rt_import_list)
 		ecommunity_free(&h->default_rt_import_list);
-	XFREE(MTYPE_RFAPI_RFP_GROUP_CFG, h->default_rfp_cfg);
+	if (h->default_rfp_cfg){
+		if (h->default_rfp_cfg_free_cb)
+			((rfapi_rfp_group_config_ptr_free_cb_t *)
+			 (h->default_rfp_cfg_free_cb))(h->default_rfp_cfg);
+		XFREE(MTYPE_RFAPI_RFP_GROUP_CFG, h->default_rfp_cfg);
+	}
 	for (afi = AFI_IP; afi < AFI_MAX; afi++) {
 		agg_table_finish(h->nve_groups_vn[afi]);
 		agg_table_finish(h->nve_groups_un[afi]);
-	}
 	XFREE(MTYPE_RFAPI_CFG, h);
 }
 

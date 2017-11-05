@@ -3868,19 +3868,22 @@ void *rfapi_get_rfp_start_val_by_bgp(struct bgp *bgp)
  ***********************************************************************/
 static void *rfapi_rfp_get_or_init_group_config_default(struct rfapi_cfg *rfc,
 							struct vty *vty,
-							uint32_t size)
+							uint32_t size,
+				 rfapi_rfp_group_config_ptr_free_cb_t *cbp)
 {
 	if (rfc->default_rfp_cfg == NULL && size > 0) {
 		rfc->default_rfp_cfg = XCALLOC(MTYPE_RFAPI_RFP_GROUP_CFG, size);
 		vnc_zlog_debug_verbose("%s: allocated, size=%d", __func__,
 				       size);
+		rfc->default_rfp_cfg_free_cb = cbp;
 	}
 	return rfc->default_rfp_cfg;
 }
 
 static void *rfapi_rfp_get_or_init_group_config_nve(struct rfapi_cfg *rfc,
 						    struct vty *vty,
-						    uint32_t size)
+						    uint32_t size,
+				 rfapi_rfp_group_config_ptr_free_cb_t *cbp)
 {
 	struct rfapi_nve_group_cfg *rfg =
 		VTY_GET_CONTEXT_SUB(rfapi_nve_group_cfg);
@@ -3896,13 +3899,15 @@ static void *rfapi_rfp_get_or_init_group_config_nve(struct rfapi_cfg *rfc,
 		rfg->rfp_cfg = XCALLOC(MTYPE_RFAPI_RFP_GROUP_CFG, size);
 		vnc_zlog_debug_verbose("%s: allocated, size=%d", __func__,
 				       size);
+		rfg->rfp_cfg_free_cb = cbp;
 	}
 	return rfg->rfp_cfg;
 }
 
 static void *rfapi_rfp_get_or_init_group_config_l2(struct rfapi_cfg *rfc,
 						   struct vty *vty,
-						   uint32_t size)
+						   uint32_t size,
+				 rfapi_rfp_group_config_ptr_free_cb_t *cbp)
 {
 	struct rfapi_l2_group_cfg *rfg =
 		VTY_GET_CONTEXT_SUB(rfapi_l2_group_cfg);
@@ -3917,6 +3922,7 @@ static void *rfapi_rfp_get_or_init_group_config_l2(struct rfapi_cfg *rfc,
 		rfg->rfp_cfg = XCALLOC(MTYPE_RFAPI_RFP_GROUP_CFG, size);
 		vnc_zlog_debug_verbose("%s: allocated, size=%d", __func__,
 				       size);
+		rfg->rfp_cfg_free_cb = cbp;
 	}
 	return rfg->rfp_cfg;
 }
@@ -3935,6 +3941,7 @@ static void *rfapi_rfp_get_or_init_group_config_l2(struct rfapi_cfg *rfc,
  *    type              group type
  *    vty               quagga vty context
  *    size              number of bytes to allocation
+ *    free_routine	routine to call when freeing the group_config_ptr
  *
  * output:
  *    none
@@ -3944,7 +3951,8 @@ static void *rfapi_rfp_get_or_init_group_config_l2(struct rfapi_cfg *rfc,
 --------------------------------------------*/
 void *rfapi_rfp_init_group_config_ptr_vty(void *rfp_start_val,
 					  rfapi_rfp_cfg_group_type type,
-					  struct vty *vty, uint32_t size)
+					  struct vty *vty, uint32_t size,
+				 rfapi_rfp_group_config_ptr_free_cb_t *cbp)
 {
 	struct bgp *bgp;
 	void *ret = NULL;
@@ -3959,15 +3967,16 @@ void *rfapi_rfp_init_group_config_ptr_vty(void *rfp_start_val,
 	switch (type) {
 	case RFAPI_RFP_CFG_GROUP_DEFAULT:
 		ret = rfapi_rfp_get_or_init_group_config_default(bgp->rfapi_cfg,
-								 vty, size);
+								 vty, size,
+								 cbp);
 		break;
 	case RFAPI_RFP_CFG_GROUP_NVE:
 		ret = rfapi_rfp_get_or_init_group_config_nve(bgp->rfapi_cfg,
-							     vty, size);
+							     vty, size, cbp);
 		break;
 	case RFAPI_RFP_CFG_GROUP_L2:
 		ret = rfapi_rfp_get_or_init_group_config_l2(bgp->rfapi_cfg, vty,
-							    size);
+							    size, cbp);
 		break;
 	default:
 		flog_err(EC_LIB_DEVELOPMENT, "%s: Unknown group type=%d",
@@ -4002,7 +4011,8 @@ void *rfapi_rfp_get_group_config_ptr_vty(void *rfp_start_val,
 					 rfapi_rfp_cfg_group_type type,
 					 struct vty *vty)
 {
-	return rfapi_rfp_init_group_config_ptr_vty(rfp_start_val, type, vty, 0);
+	return rfapi_rfp_init_group_config_ptr_vty(rfp_start_val, type, vty,
+						   0, NULL);
 }
 
 static void *

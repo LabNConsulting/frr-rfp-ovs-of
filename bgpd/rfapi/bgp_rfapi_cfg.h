@@ -34,6 +34,7 @@ struct rfapi_l2_group_cfg {
 	struct ecommunity *rt_import_list;
 	struct ecommunity *rt_export_list;
 	void *rfp_cfg; /* rfp owned group config */
+	void *rfp_cfg_free_cb; /* rfp owned group config */
 
 	QOBJ_FIELDS
 };
@@ -67,6 +68,7 @@ struct rfapi_nve_group_cfg {
 	struct rfapi_import_table *rfapi_import_table;
 
 	void *rfp_cfg; /* rfp owned group config */
+	void *rfp_cfg_free_cb; /* rfp owned group config */
 	/*
 	 * List of NVE descriptors that are assigned to this NVE group
 	 *
@@ -131,6 +133,7 @@ struct rfapi_cfg {
 	uint32_t default_response_lifetime;
 #define BGP_VNC_DEFAULT_RESPONSE_LIFETIME_DEFAULT 3600
 	void *default_rfp_cfg; /* rfp owned group config */
+	void *default_rfp_cfg_free_cb; /* rfp owned group config */
 
 	struct list *l2_groups; /* rfapi_l2_group_cfg list */
 	/* three views into the same collection of rfapi_nve_group_cfg */
@@ -244,6 +247,7 @@ struct rfapi_cfg {
 	 | BGP_VNC_CONFIG_RESPONSE_REMOVAL_DISABLE)
 
 	struct rfapi_rfp_cfg rfp_cfg; /* rfp related configuration  */
+	void *rfp_cfg_free_cb; /* rfp related configuration  */
 };
 
 #define VNC_EXPORT_ZEBRA_GRP_ENABLED(hc)                                       \
