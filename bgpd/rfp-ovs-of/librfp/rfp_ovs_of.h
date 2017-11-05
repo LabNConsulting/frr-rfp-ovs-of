@@ -28,6 +28,8 @@
 struct rfp_ovs_of_out {
 	uint16_t vid;
 	uint32_t port;
+#define RFP_OFS_OF_NO_QUEUE_ID UINT32_MAX
+	uint32_t queue_id;
 };
 
 #ifndef _QUAGGA_BGP_RFAPI_H /* for ovs code only */
