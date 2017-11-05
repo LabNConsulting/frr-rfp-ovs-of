@@ -28,8 +28,10 @@
 #include "memory.h"
 #include <stdlib.h>
 
-#include "bgp_rfapi_cfg.h"  /* really RFAPI internal */
-#include "bgp_ecommunity.h" /* for rfp_get_l2_group_str_by_pnum */
+#include "bgpd/rfapi/bgp_rfapi_cfg.h"  /* really RFAPI internal */
+#include "bgpd/bgp_ecommunity.h" /* for rfp_get_l2_group_str_by_pnum */
+#include "bgpd/bgp_mplsvpn.h"
+#include "lib/skiplist.h"
 
 DEFINE_MGROUP(RFP, "rfp")
 DEFINE_MTYPE(RFP, RFP_GENERIC, "Generic OF RFP pointer")
@@ -65,6 +67,7 @@ static const char *rfp_group_config_names[] = {
 	"DPID", "VLAN ID", "Configuration"};
 
 struct rfp_group_config {
+	struct skiplist *port_queues; /* key = port, data = queue */
 	rfp_group_config_type type;
 	unsigned long long int datapath_id; /* DPID */
 	union {
@@ -259,6 +262,16 @@ static void rfp_set_group_config_type(struct rfp_group_config *rgc,
 	return;
 }
 
+static void
+rfp_get_group_config_ptr_free_cb(void *gcp) 
+{
+	struct rfp_group_config *rgc = gcp;
+	if (rgc != NULL && rgc->port_queues) {
+		skiplist_free(rgc->port_queues);
+		rgc->port_queues = NULL;
+	}
+}
+
 static struct rfp_group_config *
 rfp_get_group_config_vty(struct rfp_instance_t *rfi, struct vty *vty,
 			 rfp_group_config_type type)
@@ -269,7 +282,8 @@ rfp_get_group_config_vty(struct rfp_instance_t *rfi, struct vty *vty,
 						 vty);
 	if (rgc == NULL) {
 		rgc = rfapi_rfp_init_group_config_ptr_vty(
-			rfi, RFAPI_RFP_CFG_GROUP_L2, vty, sizeof(*rgc));
+			  rfi, RFAPI_RFP_CFG_GROUP_L2, vty, sizeof(*rgc),
+			  rfp_get_group_config_ptr_free_cb);
 		if (type != RFP_GRP_CFG_ANY)
 			rfp_set_group_config_type(rgc, type);
 	} else if (type != RFP_GRP_CFG_ANY && type != rgc->type
@@ -725,7 +739,7 @@ DEFUN (vnc_l2_group_of_dpid_config,
        vnc_l2_group_of_dpid_config_cmd,
        "openflow dpid DPID configuration",
        OF_CONFIG_STR
-       "set associated OpenFlow DPID information\n"
+       "Set associated OpenFlow DPID information\n"
        "DPID in hexadecimal\n"
        "Identify l2-group as containing OpenFlow configuration\n")
 {
@@ -736,7 +750,7 @@ DEFUN (vnc_l2_group_of_dpid_vpid,
        vnc_l2_group_of_dpid_vpid_cmd,
        "openflow dpid DPID vid (1-4094)",
        OF_CONFIG_STR
-       "set associated OpenFlow DPID information\n"
+       "Set associated OpenFlow DPID information\n"
        "DPID in hexadecimal\n"
        "Identify l2-group as containing VLAN ID configuration\n"
        "VLAN ID value <1-4094>\n")
@@ -746,13 +760,13 @@ DEFUN (vnc_l2_group_of_dpid_vpid,
 
 ALIAS(vnc_l2_group_of_dpid_vpid, vnc_l2_group_of_dpid_untagged_cmd,
       "openflow dpid DPID vid [untagged]", OF_CONFIG_STR
-      "set associated OpenFlow DPID information\n"
+      "Set associated OpenFlow DPID information\n"
       "DPID in hexadecimal\n"
       "Identify l2-group as containing VLAN ID configuration\n"
       "Untagged\n")
 ALIAS(vnc_l2_group_of_dpid_vpid, vnc_l2_group_of_dpid_cmd, "openflow dpid DPID",
       OF_CONFIG_STR
-      "set associated OpenFlow DPID and VLAN ID\n"
+      "Set associated OpenFlow DPID and VLAN ID\n"
       "DPID in hexadecimal\n")
 DEFUN (vnc_l2_group_of_no_dpid,
        vnc_l2_group_of_no_dpid_cmd,
@@ -917,8 +931,8 @@ DEFUN (vnc_l2_group_of_no_flow_mode,
 	if (RFI_ACTIVE(rfi)
 	    && (rgc->type != type || rgc->u.modes.use_wildcards != -1))
 		vty_out(vty,
-			"Active NVEs may not be impacted by change.%s"
-			"Use 'clear openflow connections' to update.%s",
+			"Change impacts new flows.%s"
+			"Use 'clear openflow flows|connections' to update.%s",
 			VTY_NEWLINE, VTY_NEWLINE);
 
 	rgc->u.modes.use_wildcards = -1;
@@ -926,6 +940,147 @@ DEFUN (vnc_l2_group_of_no_flow_mode,
 
 	return CMD_SUCCESS;
 }
+
+DEFUN (vnc_l2_group_of_port_queues,
+       vnc_l2_group_of_port_queues_cmd,
+       "openflow port-queue PORT:QUEUE...",
+       OF_CONFIG_STR
+       "Add queue for output to a port\n"
+       "<Port number>:<Queue number> (Port is automatically added to label list)\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(rfapi_l2_group_cfg, rfg);
+	struct rfp_instance_t *rfi = NULL;
+	struct rfp_group_config *rgc;
+	int show_warn = 0;
+
+	rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
+	if (!rfi) {
+		vty_out(vty, "OpenFlow not running%s", VTY_NEWLINE);
+		return CMD_WARNING;
+	}
+	rgc = rfp_get_group_config_vty(rfi, vty, RFP_GRP_CFG_ANY);
+	if (rgc == NULL)
+		return CMD_WARNING;
+
+	if (rgc->port_queues == NULL)
+		rgc->port_queues = skiplist_new(0, NULL, NULL);
+	argc -= 2;
+	argv += 2;
+	for (; argc; --argc, ++argv) {
+		uint32_t label;
+		uint32_t qid;
+		void *oldv;
+		char *qs = strchr(argv[0]->arg, ':');
+
+		if (qs) {
+			*qs++ = '\0';
+			VTY_GET_INTEGER_RANGE("Queue value", qid, qs, 0,
+					      UINT16_MAX);
+		}
+		VTY_GET_INTEGER_RANGE("Port value", label, argv[0]->arg, 0,
+				      MPLS_LABEL_MAX);
+		zlog_debug("%s: checking %u:%u (%d)", __func__,
+			   label, qid, skiplist_count(rgc->port_queues));
+		if (skiplist_search(rgc->port_queues, (void *)(uintptr_t)label,
+				    &oldv) == 0) {
+			if ((uint32_t)(uintptr_t)oldv != qid) {
+				show_warn++;
+				skiplist_delete(rgc->port_queues,
+						(void *)(uintptr_t)label,
+						NULL);
+			}
+			else
+				continue; /* nothing to do */
+		}
+		else {		/* not found */
+			bgp_rfapi_l2_group_cfg_add_label(rfg, label);
+			show_warn++;
+		}
+		skiplist_insert(rgc->port_queues,
+				(void *)(uintptr_t)label,
+				(void *)(uintptr_t)qid);
+		zlog_debug("%s: added #%d %u:%u", __func__,
+			   skiplist_count(rgc->port_queues), label, qid);
+		
+	}
+
+	if(skiplist_count(rgc->port_queues) == 0) {
+		skiplist_free(rgc->port_queues);
+		rgc->port_queues = NULL;
+	}
+
+	if (show_warn && rgc->type != RFP_GRP_CFG_INIT &&
+	    RFI_ACTIVE(rfi))
+		vty_out(vty,
+			"Change impacts new flows.%s"
+			"Use 'clear openflow flows|connections' to update.%s",
+			VTY_NEWLINE, VTY_NEWLINE);
+	return CMD_SUCCESS;
+}
+
+DEFUN (vnc_l2_group_no_of_port_queues,
+       vnc_l2_group_no_of_port_queues_cmd,
+       "no openflow port-queue PORT:QUEUE...",
+       NO_STR
+       OF_CONFIG_STR
+       "Clear port queue list or entries\n"
+       "<Port number>:<ignored number> (Port is NOT automatically removed from label list)\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(rfapi_l2_group_cfg, rfg);
+	struct rfp_instance_t *rfi = NULL;
+	struct rfp_group_config *rgc;
+	int del_all = 0;
+	int show_warn = 0;
+
+	rfi = rfapi_get_rfp_start_val(VTY_GET_CONTEXT(bgp)); /* BGP_NODE */
+	rgc = rfp_get_group_config_vty(rfi, vty, RFP_GRP_CFG_ANY);
+	if (rgc == NULL)
+		return CMD_WARNING;
+	if (rgc->port_queues == NULL || skiplist_count(rgc->port_queues) == 0)
+		return CMD_SUCCESS;
+
+	argc -= 3;
+	argv += 3;
+	if (argc == 0)
+		del_all = 1;
+	for (; argc; --argc, ++argv) {
+		uint32_t label;
+		uint32_t qid;
+		char *qs = strchr(argv[0]->arg, ':');
+
+		if (qs) {
+			*qs++ = '\0';
+			VTY_GET_INTEGER_RANGE("Queue value", qid, qs, 0,
+					      UINT16_MAX);
+		}
+		VTY_GET_INTEGER_RANGE("Port value", label, argv[0]->arg, 0,
+				      MPLS_LABEL_MAX);
+		if (skiplist_delete(rgc->port_queues, (void *)(uintptr_t)label,
+				    NULL) == 0)
+			show_warn++;
+	}
+	if (del_all || skiplist_count(rgc->port_queues) == 0) {
+		show_warn += del_all;
+		skiplist_free(rgc->port_queues);
+		rgc->port_queues = NULL;
+	}
+
+	if (show_warn && rgc->type != RFP_GRP_CFG_INIT &&
+	    RFI_ACTIVE(rfi))
+		vty_out(vty,
+			"Active NVEs may not be impacted by change.%s"
+			"Use 'clear openflow connections' to update.%s",
+			VTY_NEWLINE, VTY_NEWLINE);
+
+	return CMD_SUCCESS;
+}
+
+ALIAS(vnc_l2_group_no_of_port_queues,
+      vnc_l2_group_no_of_port_queues_all_cmd,
+       "no openflow port-queue",
+       NO_STR
+       OF_CONFIG_STR
+      "Clear port queue list or entries\n")
 
 static int rfp_ovs_of_handle_reset(struct vty *vty, int argc,
 				   struct cmd_token **argv, int nve)
@@ -1136,10 +1291,30 @@ static void rfp_vty_install()
 	install_element(BGP_VNC_L2_GROUP_NODE, &vnc_l2_group_of_flow_mode_cmd);
 	install_element(BGP_VNC_L2_GROUP_NODE,
 			&vnc_l2_group_of_no_flow_mode_cmd);
+	install_element(BGP_VNC_L2_GROUP_NODE,
+			&vnc_l2_group_of_port_queues_cmd);
+	install_element(BGP_VNC_L2_GROUP_NODE,
+			&vnc_l2_group_no_of_port_queues_cmd);
+	install_element(BGP_VNC_L2_GROUP_NODE,
+			&vnc_l2_group_no_of_port_queues_all_cmd);
 
 	/* for compatibility with regression scripts */
 	install_element(BGP_NODE, &vnc_rfp_updated_responses_cmd);
 	install_element(BGP_NODE, &vnc_rfp_removal_responses_cmd);
+}
+
+static uint32_t
+rfp_ovs_of_get_queue_id(struct rfapi_l2_group_cfg *rfg,
+			uint32_t port)
+{
+	void * v;
+	struct rfp_group_config *rgc = rfg->rfp_cfg;
+
+	if (rgc != NULL && rgc->port_queues != NULL &&
+	    skiplist_search(rgc->port_queues, (void *)(uintptr_t)port,
+			    &v) == 0)
+		return (uint32_t)(uintptr_t)v;
+	return UINT32_MAX;
 }
 
 /***********************************************************************
@@ -1330,6 +1505,23 @@ static int rfp_cfg_group_write_cb(struct vty *vty, void *rfp_start_val,
 
 	if (type != RFAPI_RFP_CFG_GROUP_L2 || !vty || !rfi || !rgc)
 		return 0;
+	if (rgc->port_queues && skiplist_count(rgc->port_queues)) {
+		void *key;
+		void *value;
+		void *cursor = NULL;
+		int ret;
+
+		vty_out(vty, "   openflow port-queue");
+		ret = skiplist_next(rgc->port_queues, &key, &value, &cursor);
+		while (ret == 0) {
+			vty_out(vty, " %u:%u",
+				(unsigned int)(uintptr_t)key,
+				(unsigned int)(uintptr_t)value);
+			ret = skiplist_next(rgc->port_queues, 
+					    &key, &value, &cursor);
+		}
+		vty_out(vty, "%s", VTY_NEWLINE);
+	}
 	if (rgc->type == RFP_GRP_CFG_INIT) {
 		zlog_debug("%s: config in init state!", __func__);
 		return 0;
@@ -1627,7 +1819,7 @@ int rfp_mac_add_drop(void *parent, void *rfd, int add,
 	l2o->label = port & 0xffff;
 	l2o->logical_net_id = rfp_get_lni(parent, datapath_id, use_vlans, vid);
 	l2o->local_nve_id = (uint8_t)(l2o->logical_net_id);
-	l2o->tag_id = vid;
+	l2o->tag_id = vid;	/* set RT based on vid */
 
 #ifdef RFP_OVS_OF_TEST_UN_TT
 	memset(&uo, 0, sizeof(uo));
@@ -1668,14 +1860,16 @@ int rfp_mac_lookup(void *parent, void *rfd, const struct ethaddr *mac,
 	int ret;
 	struct rfapi_l2address_option l2o;
 	struct rfapi_next_hop_entry *nhe;
+	uint32_t lni;
+
 	memset(&l2o, 0, sizeof(l2o));
 
 	l2o.macaddr = *mac;
-	l2o.logical_net_id = rfp_get_lni(parent, datapath_id, use_vlans, vid);
+	lni = rfp_get_lni(parent, datapath_id, use_vlans, vid);
+	l2o.logical_net_id = lni;
 	l2o.local_nve_id = (uint8_t)(l2o.logical_net_id);
 	l2o.label = in_port & 0xffff;
 	l2o.tag_id = vid;
-
 	ret = rfapi_query(rfd, target, &l2o, &nhe);
 	if (nhe != NULL && nhe->vn_options != NULL
 	    && nhe->vn_options->type == RFAPI_VN_OPTION_TYPE_L2ADDR) {
@@ -1684,16 +1878,17 @@ int rfp_mac_lookup(void *parent, void *rfd, const struct ethaddr *mac,
 		out_vid = l2o->tag_id;
 #ifdef RFP_OVS_OF_TEST_UN_TT /* for dev testing only */
 #if 0			     /* unknown TT not working */
-      if (nhe->un_options != NULL &&
-          nhe->un_options->type == RFAPI_UN_OPTION_TYPE_TUNNELTYPE &&
-          nhe->un_options->v.tunnel.type == 0x5226 &&
-          nhe->un_options->v.tunnel.bytes >= 2)
-        {
-          uint16_t nport;
-          nport = *((uint16_t *) & nhe->un_options->v.tunnel.bgpinfo);
-          zlog_debug ("%s: port=%d, nport=%d", __func__, port, nport);
-          port = nport;
-        }
+		if (nhe->un_options != NULL &&
+		    nhe->un_options->type == RFAPI_UN_OPTION_TYPE_TUNNELTYPE &&
+		    nhe->un_options->v.tunnel.type == 0x5226 &&
+		    nhe->un_options->v.tunnel.bytes >= 2) {
+			uint16_t nport;
+			nport = *((uint16_t *)
+				  & nhe->un_options->v.tunnel.bgpinfo);
+			zlog_debug ("%s: port=%d, nport=%d", __func__,
+				    port, nport);
+			port = nport;
+		}
 #else
 		if (nhe->un_options != NULL
 		    && nhe->un_options->type == RFAPI_UN_OPTION_TYPE_TUNNELTYPE
@@ -1701,22 +1896,29 @@ int rfp_mac_lookup(void *parent, void *rfd, const struct ethaddr *mac,
 		    && (nhe->un_options->v.tunnel.bgpinfo.ip_ip.valid_subtlvs
 			& BGP_TEA_SUBTLV_PROTO_TYPE)) {
 			uint16_t nport;
-			nport = nhe->un_options->v.tunnel.bgpinfo.ip_ip.st_proto
-					.proto;
+			nport =
+			 nhe->un_options->v.tunnel.bgpinfo.ip_ip.st_proto.proto;
 			zlog_debug("%s: port=%d, nport=%d", __func__, port,
 				   nport);
 			port = nport;
 		}
 #endif
 #endif /* RFP_OVS_OF_TEST_UN_TT */
-		if (in_port != port || vid != out_vid) /* break loops! */
+		if (in_port != port || vid != out_vid) {/* break loops! */
+			struct rfapi_l2_group_cfg *rfg;
+			rfg=bgp_rfapi_get_group_by_lni_label(bgp_get_default(),
+							     lni, port);
 			port_list[pcount].port = port;
+			port_list[pcount].queue_id =
+				rfp_ovs_of_get_queue_id(rfg, port);
+		}
 		else
 			port_list[pcount].port = OFPP_NONE;
 		port_list[pcount++].vid = out_vid;
 
-		zlog_debug("%s: pcount=%d, in=%u, out=%u/%u", __func__, pcount,
-			   vid, out_vid, port);
+		zlog_debug("%s: pcount=%d, in=%u, out=%u/%u, queue=%d",
+			   __func__, pcount, vid, out_vid, port,
+			   port_list[pcount-1].queue_id );
 		rfapi_free_next_hop_list(nhe);
 	}
 	return pcount;
@@ -1813,10 +2015,14 @@ int rfp_get_ports_by_group(void *parent, void *rfd,
 						rfg->logical_net_id & vmask);
 					port_list[pcount].port =
 						(uint32_t)((uintptr_t)data);
-					zlog_debug("%s: #%d %u/%u from %s",
+					port_list[pcount].queue_id =
+						rfp_ovs_of_get_queue_id(rfg,
+						(uint32_t)((uintptr_t)data));
+					zlog_debug("%s: #%d %u/%u q%d from %s",
 						   __func__, pcount,
 						   port_list[pcount].vid,
 						   port_list[pcount].port,
+						   port_list[pcount].queue_id,
 						   rfg->name);
 					pcount++;
 				}
