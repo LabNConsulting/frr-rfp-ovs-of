@@ -3517,6 +3517,24 @@ DEFUN (vnc_l2_group_lni,
 	return CMD_SUCCESS;
 }
 
+int
+bgp_rfapi_l2_group_cfg_add_label(struct rfapi_l2_group_cfg *rfg,
+				 uint32_t label) /* note, 20bit label! */
+{
+	struct list *ll;
+
+	ll = rfg->labels;
+	if (ll == NULL) {
+		ll = list_new();
+		rfg->labels = ll;
+	}
+	if (!listnode_lookup(ll, (void *)(uintptr_t)label)) {
+		listnode_add(ll, (void *)(uintptr_t)label);
+		return 1;
+	}
+	return 0;
+}
+
 DEFUN (vnc_l2_group_labels,
        vnc_l2_group_labels_cmd,
        "labels (0-1048575)...",
@@ -3525,7 +3543,6 @@ DEFUN (vnc_l2_group_labels,
 {
 	VTY_DECLVAR_CONTEXT_SUB(rfapi_l2_group_cfg, rfg);
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct list *ll;
 
 	/* make sure it's still in list */
 	if (!listnode_lookup(bgp->rfapi_cfg->l2_groups, rfg)) {
@@ -3534,21 +3551,38 @@ DEFUN (vnc_l2_group_labels,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	ll = rfg->labels;
-	if (ll == NULL) {
-		ll = list_new();
-		rfg->labels = ll;
-	}
 	argc--;
 	argv++;
 	for (; argc; --argc, ++argv) {
 		uint32_t label;
 		label = strtoul(argv[0]->arg, NULL, 10);
-		if (!listnode_lookup(ll, (void *)(uintptr_t)label))
-			listnode_add(ll, (void *)(uintptr_t)label);
+		bgp_rfapi_l2_group_cfg_add_label(rfg, label);
 	}
 
 	return CMD_SUCCESS;
+}
+
+int
+bgp_rfapi_l2_group_cfg_del_label(struct rfapi_l2_group_cfg *rfg,
+				 uint32_t label) /* UINT32_MAX=all */
+{
+	struct list *ll;
+	int ret = 0;
+
+	ll = rfg->labels;
+	if (ll == NULL)
+		return ret;
+	if (ll->count && label != UINT32_MAX) {
+		unsigned int count = ll->count;
+		listnode_delete(ll, (void *)(uintptr_t)label);
+		ret = count - ll->count;
+	}
+	if (ll->count == 0 && label == UINT32_MAX) {
+		ret += ll->count;
+		list_delete(ll);
+		rfg->labels = NULL;
+	}
+	return ret;
 }
 
 DEFUN (vnc_l2_group_no_labels,
@@ -3560,7 +3594,7 @@ DEFUN (vnc_l2_group_no_labels,
 {
 	VTY_DECLVAR_CONTEXT_SUB(rfapi_l2_group_cfg, rfg);
 	VTY_DECLVAR_CONTEXT(bgp, bgp);
-	struct list *ll;
+	int count = 0;
 
 	/* make sure it's still in list */
 	if (!listnode_lookup(bgp->rfapi_cfg->l2_groups, rfg)) {
@@ -3569,18 +3603,12 @@ DEFUN (vnc_l2_group_no_labels,
 		return CMD_WARNING_CONFIG_FAILED;
 	}
 
-	ll = rfg->labels;
-	if (ll == NULL) {
-		vty_out(vty, "Label no longer associated with group\n");
-		return CMD_WARNING_CONFIG_FAILED;
-	}
-
 	argc -= 2;
 	argv += 2;
 	for (; argc; --argc, ++argv) {
 		uint32_t label;
 		label = strtoul(argv[0]->arg, NULL, 10);
-		listnode_delete(ll, (void *)(uintptr_t)label);
+		count += bgp_rfapi_l2_group_cfg_del_label (rfg, label);
 	}
 
 	return CMD_SUCCESS;

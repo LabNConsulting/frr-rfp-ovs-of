@@ -309,7 +309,12 @@ bgp_rfapi_get_ecommunity_by_lni_label(struct bgp *bgp, uint32_t is_import,
 extern struct list *
 bgp_rfapi_get_labellist_by_lni_label(struct bgp *bgp, uint32_t logical_net_id,
 				     uint32_t label); /* note, 20bit label! */
-
+extern int
+bgp_rfapi_l2_group_cfg_add_label(struct rfapi_l2_group_cfg *rfg,
+				 uint32_t label); /* note, 20bit label! */
+extern int
+bgp_rfapi_l2_group_cfg_del_label(struct rfapi_l2_group_cfg *rfg,
+				 uint32_t label); /* UINT32_MAX=all */
 #endif /* ENABLE_BGP_VNC */
 
 #endif /* _QUAGGA_BGP_RFAPI_CFG_H */
