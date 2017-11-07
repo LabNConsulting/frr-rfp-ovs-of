@@ -141,6 +141,8 @@ static uint32_t rfp_get_lni(struct rfp_instance_t *rfi,
 {
 	uint32_t lni = 0; /* 24-bit logical network ID */
 	int count;
+	int uv = (vid ? use_vlans : -1);
+
 	count = sizeof(datapath_id) / sizeof(lni);
 	while (--count > 0) {
 		lni += (uint32_t)(datapath_id & 0xffffffff);
@@ -149,6 +151,8 @@ static uint32_t rfp_get_lni(struct rfp_instance_t *rfi,
 	lni = 0xffffff & ((lni & 0xff) + (lni >> 8));
 	if (USE_VLANS(rfi, use_vlans))
 		lni = 0xffffff & ((lni << 12) + (vid & RFP_VLAN_MASK));
+	zlog_debug("%s: dpid=%016llx, use_vlans=%d, vid=%u --> lni=%u",
+		   __func__, datapath_id, use_vlans, vid, lni);
 	return lni;
 }
 
@@ -1308,8 +1312,12 @@ rfp_ovs_of_get_queue_id(struct rfapi_l2_group_cfg *rfg,
 			uint32_t port)
 {
 	void * v;
-	struct rfp_group_config *rgc = rfg->rfp_cfg;
+	struct rfp_group_config *rgc;
 
+	if (rfg == NULL)
+		return UINT32_MAX;
+
+	rgc = rfg->rfp_cfg;
 	if (rgc != NULL && rgc->port_queues != NULL &&
 	    skiplist_search(rgc->port_queues, (void *)(uintptr_t)port,
 			    &v) == 0)
