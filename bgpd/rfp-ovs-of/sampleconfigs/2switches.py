@@ -50,7 +50,8 @@ class MyTopo( Topo ):
        rightHost2 = self.addHost( 'r2', cls=VLANHost, vlan=100 )
        rightHost3 = self.addHost( 'r3', cls=VLANHost, vlan=400 )
        rightHost4 = self.addHost( 'r4' )
-       rightHost5 = self.addHost( 'r5' )
+       rightHost5 = self.addHost( 'r5', cls=VLANHost, vlan=500)
+       rightHost6 = self.addHost( 'r6', cls=VLANHost, vlan=600)
 
        leftSwitch = self.addSwitch( 's1')
        rightSwitch = self.addSwitch( 's2' )
@@ -67,6 +68,7 @@ class MyTopo( Topo ):
        self.addLink( rightHost3, rightSwitch )
        self.addLink( rightHost4, rightSwitch )
        self.addLink( rightHost5, rightSwitch )
+       self.addLink( rightHost6, rightSwitch )
 
        self.addLink( leftSwitch,  rightSwitch, 100, 100)
        self.addLink( leftSwitch,  rightSwitch, 200, 200)

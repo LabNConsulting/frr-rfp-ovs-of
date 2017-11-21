@@ -99,6 +99,24 @@ OFPST_FLOW reply (OF1.3) (xid=0x2):
  cookie=0x0, duration=12.578s, table=0, n_packets=4, n_bytes=336, idle_timeout=60, priority=1,in_port=4,dl_src=00:00:00:00:00:09,dl_dst=00:00:00:00:00:04 actions=output:200
  cookie=0x0, duration=563.463s, table=0, n_packets=8, n_bytes=464, priority=0 actions=CONTROLLER:65535
 
+## test label swap
+mininet> l3 ping r3
+PING 10.0.0.8 (10.0.0.8) 56(84) bytes of data.
+64 bytes from 10.0.0.8: icmp_seq=1 ttl=64 time=2.88 ms
+64 bytes from 10.0.0.8: icmp_seq=2 ttl=64 time=0.304 ms
+64 bytes from 10.0.0.8: icmp_seq=3 ttl=64 time=0.154 ms
+^C
+--- 10.0.0.8 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2000ms
+rtt min/avg/max/mdev = 0.154/1.114/2.885/1.253 ms
+mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s2
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=4.414s, table=0, n_packets=3, n_bytes=298, idle_timeout=60, priority=1,in_port=3,dl_vlan=400,dl_src=00:00:00:00:00:08,dl_dst=00:00:00:00:00:03 actions=strip_vlan,push_vlan:0x8100,set_field:300->vlan_vid,output:200
+ cookie=0x0, duration=4.412s, table=0, n_packets=2, n_bytes=200, idle_timeout=60, priority=1,in_port=200,dl_vlan=300,dl_src=00:00:00:00:00:03,dl_dst=00:00:00:00:00:08 actions=strip_vlan,push_vlan:0x8100,set_field:400->vlan_vid,output:3
+ cookie=0x0, duration=4.414s, table=0, n_packets=0, n_bytes=0, idle_timeout=60, priority=1,in_port=200,dl_vlan=300,dl_src=00:00:00:00:00:03,dl_dst=ff:ff:ff:ff:ff:ff actions=strip_vlan,push_vlan:0x8100,set_field:400->vlan_vid,output:3
+ cookie=0x0, duration=9602.706s, table=0, n_packets=11, n_bytes=658, priority=0 actions=CONTROLLER:65535
+
+
 ## Check running state on bgpd
 
 > telnet localhost 2605
