@@ -7,10 +7,11 @@ cd frr-rfp-ovs-of
 git checkout -t remotes/origin/working/3.0/rfp-ovs-of+port-queues
 ```
 ## configure the code
+This was tested on Ubuntu 18.04
 ```
 ./bootstrap.sh
 automake bgpd/rfp-ovs-of/{librfp,rfptest}/Makefile
-./configure --with-rfp-path=bgpd/rfp-ovs-of --enable-dev-build --enable-static --disable-shared --disable-vtysh --disable-zebra --disable-ripd --disable-ripngd --disable-ospfd --disable-ospf6d --disable-nhrpd --disable-watchfrr --disable-isisd --disable-pimd --disable-ospfapi --disable-ospfclient --disable-ldpd
+ ./configure --with-rfp-path=bgpd/rfp-ovs-of --enable-dev-build --enable-static --disable-shared --disable-vtysh --disable-zebra --disable-ripd --disable-ripngd --disable-ospfd --disable-ospf6d --disable-nhrpd --disable-watchfrr --disable-isisd --disable-pimd --disable-ospfapi --disable-ospfclient --disable-ldpd
 ```
 ## confirm that you have a git user set
 ```
@@ -34,6 +35,8 @@ Note that openflow is pulled from OVS (Apache licensed) and then automatically m
 ## start bgpd
 
 ```
+sudo mkdir -p /usr/local/var/run/openvswitch
+sudo chown $USER /usr/local/var/run/openvswitch
 bgpd/bgpd -f bgpd/rfp-ovs-of/sampleconfigs/2switches.conf -p 1234 -n --skip_runas -i pid.bgpd-openflow
 ```
 
@@ -44,6 +47,7 @@ Note: mininet needs to be installed before running
 Change the ip=<IP_ADDRESS> if runinng bgp on a different host
 
 ```
+cd bgpd/rfp-ovs-of/sampleconfigs
 sudo mn --mac --switch ovsk,protocols=OpenFlow13 --controller remote,ip=127.0.0.1 --custom 2switches.py --topo mytopo
 ```
 
