@@ -19,8 +19,21 @@ index 6b599c93d..0366b5918 100644
              vlog_rate_limit(THIS_MODULE, level__, RL, __VA_ARGS__); \
          }                                                           \
      } while (0)
+diff --git a/lib/automake.mk b/lib/automake.mk
+index 5387d519a..ac0d2562e 100644
+--- a/lib/automake.mk
++++ b/lib/automake.mk
+@@ -407,7 +407,7 @@ lib/dhparams.c: lib/dh1024.pem lib/dh2048.pem lib/dh4096.pem
+ 	 openssl dhparam -C -in $(srcdir)/lib/dh1024.pem -noout &&	\
+ 	 openssl dhparam -C -in $(srcdir)/lib/dh2048.pem -noout &&	\
+ 	 openssl dhparam -C -in $(srcdir)/lib/dh4096.pem -noout)	\
+-	| sed 's/\(get_dh[0-9]*\)()/\1(void)/' > lib/dhparams.c.tmp &&  \
++	| sed 's/static \(DH .get_dh[0-9]*\).*/\1(void)/' > lib/dhparams.c.tmp &&  \
+ 	mv lib/dhparams.c.tmp lib/dhparams.c
+ else
+ lib_libopenvswitch_la_SOURCES += lib/stream-nossl.c
 diff --git a/lib/learning-switch.c b/lib/learning-switch.c
-index 72be4571d..fd32d31ac 100644
+index cb54c8f63..afd8bc80d 100644
 --- a/lib/learning-switch.c
 +++ b/lib/learning-switch.c
 @@ -45,6 +45,10 @@
@@ -554,7 +567,7 @@ index b3a5d13ea..9b2c258ba 100644
  
  #endif /* learning-switch.h */
 diff --git a/lib/packets.h b/lib/packets.h
-index 84daca1e1..f9705d904 100644
+index 6b94ab61b..0c03b78b8 100644
 --- a/lib/packets.h
 +++ b/lib/packets.h
 @@ -266,7 +266,7 @@ static inline struct eth_addr eth_addr_invert(const struct eth_addr src)
@@ -674,19 +687,19 @@ index fb228f096..8e79610a1 100644
 +}
 +
 diff --git a/manpages.mk b/manpages.mk
-index bf96e9ff4..614124294 100644
+index 614124294..bf96e9ff4 100644
 --- a/manpages.mk
 +++ b/manpages.mk
-@@ -110,6 +110,12 @@ utilities/ovs-appctl.8: \
+@@ -110,12 +110,6 @@ utilities/ovs-appctl.8: \
  utilities/ovs-appctl.8.in:
  lib/common.man:
  
-+utilities/ovs-benchmark.1: \
-+	utilities/ovs-benchmark.1.in \
-+	lib/ovs.tmac
-+utilities/ovs-benchmark.1.in:
-+lib/ovs.tmac:
-+
+-utilities/ovs-benchmark.1: \
+-	utilities/ovs-benchmark.1.in \
+-	lib/ovs.tmac
+-utilities/ovs-benchmark.1.in:
+-lib/ovs.tmac:
+-
  utilities/ovs-dpctl-top.8: \
  	utilities/ovs-dpctl-top.8.in
  utilities/ovs-dpctl-top.8.in:
