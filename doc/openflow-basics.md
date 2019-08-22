@@ -1,35 +1,41 @@
 # Nacent FRR with Openflow How-To
 
 ## get the code
-
-> git clone  https://github.com/LabNConsulting/frr-rfp-ovs-of.git
-> cd frr-rfp-ovs-of
-> git checkout -t remotes/origin/working/3.0/rfp-ovs-of+port-queues
-
+```
+git clone  https://github.com/LabNConsulting/frr-rfp-ovs-of.git
+cd frr-rfp-ovs-of
+git checkout -t remotes/origin/working/3.0/rfp-ovs-of+port-queues
+```
 ## configure the code
-
-> ./bootstrap.sh
-> ./configure --with-rfp-path=bgpd/rfp-ovs-of --enable-dev-build --enable-static --disable-shared --disable-vtysh --disable-zebra --disable-ripd --disable-ripngd --disable-ospfd --disable-ospf6d --disable-nhrpd --disable-watchfrr --disable-isisd --disable-pimd --disable-ospfapi --disable-ospfclient --disable-ldpd
-
+```
+./bootstrap.sh
+automake bgpd/rfp-ovs-of/{librfp,rfptest}/Makefile
+./configure --with-rfp-path=bgpd/rfp-ovs-of --enable-dev-build --enable-static --disable-shared --disable-vtysh --disable-zebra --disable-ripd --disable-ripngd --disable-ospfd --disable-ospf6d --disable-nhrpd --disable-watchfrr --disable-isisd --disable-pimd --disable-ospfapi --disable-ospfclient --disable-ldpd
+```
 ## confirm that you have a git user set
-
-> git config --global --get-all user.email
-
+```
+git config --global --get-all user.email
+```
 if not set
-
-> git config --global  user.email <FILL_IN>
+```
+git config --global  user.email <FILL_IN>
+```
 
 ## build the code
 
 Important: do not do parallel make at this 
 
-> make
+```
+make
+```
 
 Note that openflow is pulled from OVS (Apache licensed) and then automatically modified
 
 ## start bgpd
 
-> bgpd/bgpd -f bgpd/rfp-ovs-of/sampleconfigs/2switches.conf -p 1234 -n --skip_runas -i pid.bgpd-openflow
+```
+bgpd/bgpd -f bgpd/rfp-ovs-of/sampleconfigs/2switches.conf -p 1234 -n --skip_runas -i pid.bgpd-openflow
+```
 
 ## start mininet
 
@@ -37,9 +43,12 @@ Note: mininet needs to be installed before running
 
 Change the ip=<IP_ADDRESS> if runinng bgp on a different host
 
-> sudo mn --mac --switch ovsk,protocols=OpenFlow13 --controller remote,ip=127.0.0.1 --custom 2switches.py --topo mytopo
+```
+sudo mn --mac --switch ovsk,protocols=OpenFlow13 --controller remote,ip=127.0.0.1 --custom 2switches.py --topo mytopo
+```
 
 ## test local traffic
+```
 mininet> l1 ping l2
 PING 10.0.0.2 (10.0.0.2) 56(84) bytes of data.
 64 bytes from 10.0.0.2: icmp_seq=1 ttl=64 time=3.24 ms
@@ -64,8 +73,10 @@ OFPST_FLOW reply (OF1.3) (xid=0x2):
  cookie=0x0, duration=16.286s, table=0, n_packets=3, n_bytes=246, idle_timeout=60, priority=1,in_port=1,dl_vlan=100,dl_src=00:00:00:00:00:01,dl_dst=00:00:00:00:00:02 actions=output:2
  cookie=0x0, duration=16.287s, table=0, n_packets=4, n_bytes=344, idle_timeout=60, priority=1,in_port=2,dl_vlan=100,dl_src=00:00:00:00:00:02,dl_dst=00:00:00:00:00:01 actions=output:1
  cookie=0x0, duration=421.652s, table=0, n_packets=6, n_bytes=376, priority=0 actions=CONTROLLER:65535
+```
 
 ## test bridged traffic
+```
 mininet> l4 ping r4
 PING 10.0.0.9 (10.0.0.9) 56(84) bytes of data.
 64 bytes from 10.0.0.9: icmp_seq=1 ttl=64 time=2.87 ms
@@ -98,8 +109,10 @@ OFPST_FLOW reply (OF1.3) (xid=0x2):
  cookie=0x0, duration=12.576s, table=0, n_packets=3, n_bytes=238, idle_timeout=60, priority=1,in_port=200,dl_src=00:00:00:00:00:04,dl_dst=00:00:00:00:00:09 actions=output:4
  cookie=0x0, duration=12.578s, table=0, n_packets=4, n_bytes=336, idle_timeout=60, priority=1,in_port=4,dl_src=00:00:00:00:00:09,dl_dst=00:00:00:00:00:04 actions=output:200
  cookie=0x0, duration=563.463s, table=0, n_packets=8, n_bytes=464, priority=0 actions=CONTROLLER:65535
+```
 
 ## test label swap
+```
 mininet> l3 ping r3
 PING 10.0.0.8 (10.0.0.8) 56(84) bytes of data.
 64 bytes from 10.0.0.8: icmp_seq=1 ttl=64 time=2.88 ms
@@ -115,11 +128,11 @@ OFPST_FLOW reply (OF1.3) (xid=0x2):
  cookie=0x0, duration=4.412s, table=0, n_packets=2, n_bytes=200, idle_timeout=60, priority=1,in_port=200,dl_vlan=300,dl_src=00:00:00:00:00:03,dl_dst=00:00:00:00:00:08 actions=strip_vlan,push_vlan:0x8100,set_field:400->vlan_vid,output:3
  cookie=0x0, duration=4.414s, table=0, n_packets=0, n_bytes=0, idle_timeout=60, priority=1,in_port=200,dl_vlan=300,dl_src=00:00:00:00:00:03,dl_dst=ff:ff:ff:ff:ff:ff actions=strip_vlan,push_vlan:0x8100,set_field:400->vlan_vid,output:3
  cookie=0x0, duration=9602.706s, table=0, n_packets=11, n_bytes=658, priority=0 actions=CONTROLLER:65535
-
+```
 
 ## Check running state on bgpd
-
-> telnet localhost 2605
+```
+telnet localhost 2605
 Trying ::1...
 Connected to localhost.
 Escape character is '^]'.
@@ -157,12 +170,12 @@ L2 group ports: 4       Untagged    Group: sw2-null             RT: 0:2000
                 100     VLAN: 100   Group: sw2-v100             RT: 0:2100
                 200     VLAN: 300   Group: sw2-v300             RT: 0:2400
                 3       VLAN: 400   Group: sw2-v400             RT: 0:2400
-
+```
 ## other useful commands
+```
+show vnc registrations
 
-> show vnc registrations
-
-> enable
-> clear openflow connections ...
-> clear openflow flows ...
-
+enable
+clear openflow connections ...
+clear openflow flows ...
+```
