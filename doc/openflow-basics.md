@@ -44,6 +44,8 @@ bgpd/bgpd -f bgpd/rfp-ovs-of/sampleconfigs/2switches.conf -p 1234 -n --skip_runa
 
 Note: mininet needs to be installed before running 
 
+Also: The package 'vlan' is required in Ubuntu or Debian, or 'vconfig' in Fedora
+
 Change the ip=<IP_ADDRESS> if runinng bgp on a different host
 
 ```
