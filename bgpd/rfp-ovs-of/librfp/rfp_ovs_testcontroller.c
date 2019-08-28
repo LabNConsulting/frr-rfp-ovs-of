@@ -602,11 +602,11 @@ static void rfp_ovs_of_fd_switch(void *vooi, int fd, void *data)
 	struct switch_ *sw = data;
 
 	/* Do some switching work. */
-	if (lswitch_is_alive(sw->lswitch) && lswitch_is_connected(sw->lswitch))
+	if (lswitch_is_alive(sw->lswitch))
 		lswitch_run(sw->lswitch);
-	if (!lswitch_is_alive(sw->lswitch)) {
+        /* state may change based on run */
+	if (!lswitch_is_alive(sw->lswitch))
 		rfp_ovs_of_reset_switch(ooi, sw);
-	}
 }
 
 static struct switch_ *rfp_ovs_of_switch_add(struct ovs_of_info *ooi,
